@@ -40,87 +40,94 @@ Track -> Project -> Todo 提供了一个结构性的项目及任务管理框架�
 
 我在今年大量使用 [Flow](https://www.flow.app/) 这款番茄钟工具。它的真正亮点在于极简的设计哲学：它的界面只有一个计时界面和开始按钮。任务的开始和结束应该是完全无压力的，而不是选择和纠结。Now 行动器借鉴了 Flow 的设计哲学：无需纠结。
 
-Now 行动器的核心功能之一：无需纠结，找到当下最值得做的事。
+**Now 行动器的核心功能之一：无需纠结，找到当下最值得做的事**
 
-当下我要做什么？\
-我们有了 Track -> Project -> Todo 结构，也有了 Box 收集箱。在如此繁多的事项中，我们如何找到 Now / 现在 我要做什么？\
+我们有了 Track -> Project -> Todo 结构，也有了 Box 收集箱。在如此繁多的事项中，我们如何找到：\
+Now / 现在 我要做什么？
+
 首先我们可以进入结构或 Box 自行选择一项行动，没有哪个算法能够替代用户做决定。\
 其次，在用户没有选择的情况下，为了达成无需纠结的理念，我们通过 Deadline、重要性、紧急程度、意愿为用户综合推荐一个 Now list。
 
-Now 行动器的核心功能之二：提供极简的番茄钟的倒计时、正计时、休息时间，避免过度沉浸，保护精力与身体健康。\
+同时，你也可以在不选择任何事项的情况下，直接开始行动，在行动结束后记录 Done List 和 Takeaways。
+
+**Now 行动器的核心功能之二：提供极简的番茄钟的倒计时、正计时、休息时间，避免过度沉浸，保护精力与身体健康**
+
 如果说上面的架构都只是搭建基础，那这一步就是真正开始行动的地方。我们希望用户的每次行动，都能够不纠结，无压力，进入最好的心流状态，并在合适的时候退出。
 
-Now 行动器的核心功能之三：Takeaways\
+计时、休息和退出的存在，并不是为了提高效率，而是为了帮助你：避免在状态良好时无限延长投入，导致精力透支，让“推进一点点”成为一种可持续的节奏。
 
-<!-- GPT -->
-3.1 无需纠结：找到当下最值得推进的一步
-
-在 MukiTodo 中，“当下最值得做的事”并不等同于“最紧急”“最重要”或“最想做”。这些维度在不同情境下都会失效。Now 行动器的设计理念是：在不破坏整体结构和平衡的前提下，选取一项最适合当前状态推进的一小步行动。
-
-因此，Now 行动器并不是简单地对所有 Todo 排序，而是在结构已经确定的前提下，综合考虑多个因素，对候选行动进行筛选和权衡，例如：
-
-是否存在明确的截止时间或外部约束；
-
-该行动对当前 Project 推进的关键程度；
-
-行动本身的规模是否适合当前的时间和精力状态；
-
-用户当前对该行动的心理意愿和阻力；
-
-某些项目是否已经长时间未被推进，需要被重新唤起。
-
-这些因素不会形成一个“绝对最优解”，而是帮助系统给出一个当下合理的建议。Now 行动器的目标不是“替你规划人生”，而是让你在这一刻，可以毫不费力地开始。
-
-3.2 行动本身应该是轻的
-
-Now 行动器借鉴了 Flow 等极简番茄钟工具的设计理念：行动的开始和结束都应该是低摩擦的。
-
-在 Now 中，你不需要再次思考结构、优先级或长期意义。你只需要面对一件具体、清晰的 Todo，并决定是否开始。计时、休息和退出的存在，并不是为了提高效率，而是为了帮助你：
-
-避免在状态良好时无限延长投入，导致精力透支；
-
-给行动一个自然的结束点，而不是被动中断；
-
-让“推进一点点”成为一种可持续的节奏。
-
-如果说 Track -> Project -> Todo 是理性层面的结构设计，那么 Now 行动器更接近于行为层面的支持工具：它尊重人的注意力有限、能量波动的现实。
-
-3.3 Takeaways：让行动产生积累
+**Now 行动器的核心功能之三：Takeaways – 让行动产生积累**
 
 在传统的待办清单中，任务完成往往意味着“被勾掉然后消失”。但在 MukiTodo 中，行动的结束并不是终点，而是一次内化的机会。
 
 Now 行动器与 Takeaways 紧密结合。在一次行动结束后，用户可以记录：
+- 这次推进中学到了什么
+- 哪些判断被验证或被修正
+- 哪些新的问题、想法或项目被激发出来
 
-这次推进中学到了什么；
-
-哪些判断被验证或被修正；
-
-哪些新的问题、想法或项目被激发出来。
-
-这些 Takeaways 不只是日志，而是连接行动与长期成长的桥梁。它们可以反向生成新的 Idea、Project 或 Todo，也可以在未来帮助你更好地理解自己的节奏、偏好与限制。
+这些 Takeaways 不只是日志，而是连接行动与长期成长的桥梁。它们可以让你直观地感受到每天的进步，也可以在未来帮助你更好地理解自己的节奏、偏好与限制。
 
 通过 Takeaways，MukiTodo 将“做过的事情”转化为“留下来的东西”，让每一次行动，不论大小，都有机会成为长期积累的一部分。
-<!--  -->
-
-### 
 
 
 
 
-## 界面与交互设计
+
+archive 语义：我暂时不处理/不想看到这个事项，但是我希望保留它，将来可能需要处理。
+
+
+## TUI 界面与交互设计
+
+典型路径：
+1. 进入 Structure 结构视图
+2. 选择 Track, Project (, Todo)
+3. 添加至 NOW 行动器
+4. 开始行动
+5. 结束行动
+6. 记录 Takeaways
+
+
+
+
+- Switch View: `Tab`
+- Toggle Box: `Shift`
+- Quit: `q`
+
 
 ### 1. Now 行动器
+
+```text
+┌───────────────────── NOW ──────────────────────┐
+│                                                │
+│               --- Todo Info ---                │
+│                                                │
+│                     25:00                      │
+│                                                │
+│                       ⏱                        │
+└────────────────────────────────────────────────┘
+```
+
+- Start / Pause / Resume: `Space`
+- Reset: `r`
+- Adjust: `+ / = / -`
+- View Info: `i`
+- Finish Session: `Enter`
 
 
 ### 2. Track -> Project -> Todo 结构
 
 General:
-- Move Cursor: Up/Down Arrow
-- Select: Right Arrow
-- Back: Left Arrow
-- Add: + / =
-- Delete: Backspace
-- Rename: R
+- Move Cursor: `Up/Down Arrow`
+- Select: `Right Arrow`
+- Back: `Left Arrow`
+- View Info: `i`
+- Add: `+ / =`
+- Rename: `r`
+- Delete: `Backspace`
+- Done / Undo: `Space`
+- Enter NOW with item: `Enter`
+
+
 
 Structure Level: Tracks
 
@@ -137,117 +144,46 @@ Structure Level: Tracks with Projects (Default)
 └────────────────────────────────────┘
 ```
 
-Toggle View: T
+<!-- - Toggle Display Mode: T -->
+- Add Project to NOW: Enter
+
+
 
 Structure Level: Todos
 
-Done/Undo Todo Item: Space
+- Add Todo to NOW: Enter
 
 
+
+### 3. Info 详细信息
+
+- Quit Info View: `i` / `Escape`
+- Move Cursor: `Up/Down Arrow`
+- Edit Field: `r`
 - 
 
 
-
-
-
-
-### 3. Box 收集箱
-
-
-### 
-
-
-
-## 工程实现
-
-### 项目结构
-
-```
-mukitodo/
-├── pyproject.toml          # uv 项目配置与依赖
-├── README.md
-├── mukitodo/
-│   ├── __init__.py
-│   ├── cli.py              # Typer 命令行入口 (todo 命令)
-│   ├── commands.py         # 命令解析与执行（无状态）
-│   ├── domain.py           # 业务对象与规则（不涉及数据库）
-│   ├── models.py           # SQLAlchemy/SQLite ORM 模型
-│   ├── database.py         # 数据库连接与初始化
-│   ├── services.py         # 协调层（连接 domain 和 models）
-│   └── tui/                # prompt-toolkit TUI 应用
-│       ├── __init__.py
-│       ├── state.py        # 状态管理
-│       ├── render.py       # 渲染函数
-│       └── app.py          # 按键绑定 + 启动入口
-```
-
-代码风格：自解释，减少不必要的注释
-
-
-### 环境管理 (uv)
-
-使用 uv 进行依赖管理，pyproject.toml 配置 `[project.scripts]` 使 `todo` 命令可用。
-
-### 数据存储
-
-SQLite 数据库，路径：`~/.mukitodo/todo.db`
-
-数据库设计：
-
-Track:
-- id PRIMARY KEY
-- name NOT NULL
-- description
-- status NOT NULL, DEFAULT 'active' (active / sleeping / archived)
-- created_at NOT NULL
-- archived_at
-- order_index
-
-Project:
-- id PRIMARY KEY
-- track_id NOT NULL, FOREIGN KEY REFERENCES Track(id)
-- name NOT NULL
-- description
-- status NOT NULL, DEFAULT 'active' (active / focusing / sleeping / finished / archived)
-- created_at NOT NULL
-- started_at
-- finished_at
-- archived_at
-- order_index
-
-TodoItem: (Structure Todo / Box Todo)
-- id PRIMARY KEY
-- project_id FOREIGN KEY REFERENCES Project(id) (nullable)
-- title NOT NULL
-- description
-- status NOT NULL, DEFAULT 'active' (active / sleeping / finished / archived)
-- created_at NOT NULL
-- completed_at
-- order_index
-
-
-Idea:
-
-Session: (Now Action Session)
-
-Takeaway:
+### 4. Box 收集箱
 
 
 
 
 
 
+### Input Mode 输入模式
+
+InputPurpose:
+- STRUCTURE_ADD
+- RENAME_ITEM
+- EDIT_INFO_FIELD
+
+- Cancel Input: `Escape` / `Ctrl+G`
+- Confirm Input: `Enter`
+- Input: `Any`
 
 
-### CLI 命令 (typer)
 
-```bash
-# 可视化
-todo view
-todo                        # 默认进入 TUI
-todo help
-```
-全局选项：`--no-view` 执行命令后不自动打开 TUI，命令待定
+
 
 ### TUI 界面 (prompt-toolkit)
 
@@ -299,26 +235,347 @@ backspace / delete
 - 底部命令输入框，支持直接输入命令（无需 todo 前缀）
 - 状态栏显示操作结果（绿色成功/红色失败）
 
+计划在未来实现
+
+
+## CLI 命令设计（计划在未来实现，预计 v0.0.5）
+
 ```bash
-# 退出命令模式
-q / Ctrl+G / ESC
+todo                        # Open TUI (default)
+todo help                   # Show help
+todo view                   # Open TUI
 
-# help
-help / h / ?
+# Track Commands
+todo create track <name> [<description>]        # Create a track
+todo delete track <id>                          # Delete a track
+todo list tracks                                # List all tracks (default: (id, name))
+todo track <id>                                 # View track details
+todo rename track <id> <new_name>               # Rename a track
+todo update track --description <description>   # Update track description
+todo activate track <id>                        # Activate a track
+todo sleep track <id>                           # Sleep a track
+todo archive track <id>                         # Archive a track
+todo unarchive track <id>                       # Unarchive a track
 
-# Track / Project / Item (作用于当前选中层级)
-add <name>
-list
-delete <name> / <index>
-select / enter <name> / <index>（或直接输入 <index>，相当于 NORMAL MODE 的进入下一级）
-back （相当于 NORMAL MODE 的返回上一级）
+# Project Commands
+todo create project <name> in <track_id> [<description>]    # Create a project in a track
+todo delete project <id>                                # Delete a project
+todo list projects in <track_id>                         # List all projects in a track
+todo project <id>                                       # View project details
+todo rename project <id> <new_name>                      # Rename a project
+todo update project --description <description>          # Update project properties
+                    --deadline <deadline>
+                    --willingness_hint <willingness_hint>
+                    --importance_hint <importance_hint>
+                    --urgency_hint <urgency_hint>
+todo activate project <id>                               # Activate a project
+todo focus project <id>                                  # Focus a project
+todo sleep project <id>                                  # Sleep a project
+todo cancel project <id>                                 # Cancel a project
+todo finish project <id>                                 # Finish a project
+todo archive project <id>                                # Archive a project
+todo unarchive project <id>                              # Unarchive a project
 
-# Item
-done <name> / <index> （或直接输入 <index>）
-undo <name> / <index> （或直接输入 <index>）
+# Todo Commands
+todo create todo <name> in <project_id> [<description>]    # Create a todo in a project
+todo delete todo <id>                                      # Delete a todo
+todo list todos in <project_id>                             # List all todos in a project
+todo todo <id>                                              # View todo details
+todo rename todo <id> <new_name>                             # Rename a todo
+todo update todo --description <description>                 # Update todo properties
+                 --url <url>
+                 --deadline <deadline>
+todo activate todo <id>                                   # Activate a todo
+todo done todo <id>                                        # Done a todo
+todo cancel todo <id>                                      # Cancel a todo
+todo archive todo <id>                                      # Archive a todo
+todo unarchive todo <id>                                    # Unarchive a todo
+
+
+# Box Commands
+todo create box todo <name> [<description>]     # Create a box todo
+todo delete box todo <id>                       # Delete a box todo
+todo list box todos                             # List all box todos
+todo box todo <id>                              # View box todo details
+todo rename box todo <id> <new_name>            # Rename a box todo
+todo update box todo --description <description>    # Update box todo properties
+                     --url <url>
+                     --deadline <deadline>
+todo activate box todo <id>                       # Activate a box todo
+todo done box todo <id>                            # Done a box todo
+todo cancel box todo <id>                          # Cancel a box todo
+todo archive box todo <id>                          # Archive a box todo
+todo unarchive box todo <id>                        # Unarchive a box todo
+
+todo create idea <name> [<description>]    # Create a idea
+todo delete idea <id>                      # Delete a idea
+todo list ideas                             # List all ideas
+todo idea <id>                              # View idea details
+todo rename idea <id> <new_name>            # Rename a idea
+todo update idea --description <description> # Update idea properties
+                    --maturity_hint <maturity_hint>
+                    --willingness_hint <willingness_hint>
+todo activate idea <id>                       # Activate a idea
+todo sleep idea <id>                          # Sleep a idea
+todo deprecate idea <id>                      # Deprecate a idea
+todo promote idea <id> to <track_id>          # Promote a idea to a track
+todo archive idea <id>                         # Archive a idea
+todo unarchive idea <id>                       # Unarchive a idea
+
+# Now Session Commands
+# No real-time timer for CLI currently
+todo save session <project_id> <todo_id> <duration_minutes> <started_at_utc> <ended_at_utc> [--takeaway <takeaway_content>] # Save a session and record takeaway
+todo delete session <id>                          # Delete a session
+todo list sessions                                # List all sessions
+todo session <id>                                  # View session details
+
+# Takeaway Commands
+todo create takeaway <title> <content> [--project_id <project_id>] [--todo_id <todo_id>] [--session_id <session_id>] # Create a takeaway
+todo delete takeaway <id>                          # Delete a takeaway
+todo list takeaways                                # List all takeaways
+todo takeaway <id>                                  # View takeaway details
+todo update takeaway --title <title> --content <content>            # Update takeaway content
+todo archive takeaway <id>                         # Archive a takeaway
+todo unarchive takeaway <id>                       # Unarchive a takeaway
 ```
 
 
-## 依赖
 
+## 工程设计与实现
+
+### 项目结构
+
+```
+mukitodo/
+├── pyproject.toml          # uv 项目配置与依赖
+├── README.md               # 本文档
+├── mukitodo/
+│   ├── __init__.py         # 初始化
+│   ├── cli.py              # 命令行入口 (todo 命令)
+│   ├── tui/                # prompt-toolkit TUI 应用
+│   │   ├── __init__.py     # 初始化
+│   │   ├── states/         # 状态管理
+│   │   │   ├── app_state.py        # 顶层状态协调器
+│   │   │   ├── now_state.py        # NOW 视图状态
+│   │   │   ├── structure_state.py  # STRUCTURE 视图状态
+│   │   │   ├── info_state.py       # INFO 视图状态
+│   │   │   └── message_holder.py   # 消息管理
+│   │   ├── renderer.py     # 渲染器（纯渲染层）
+│   │   └── app.py          # 按键绑定 + 布局 + 启动入口
+│   ├── commands.py         # CLI / 命令解析与执行（无状态）未完成
+│   ├── actions.py          # 业务操作
+│   ├── database.py         # 数据库连接与初始化
+│   ├── models.py           # SQLAlchemy/SQLite ORM 模型定义
+```
+
+### 架构设计哲学
+
+**一、整体架构哲学：单向分层，依赖递减**
+
+```text
+┌─────────────┐
+│ Renderer    │ ← 渲染：只负责呈现
+├─────────────┤
+│ State Layer │ ← 状态：协调与缓存
+├─────────────┤
+│ App         │ ← 应用：交互与 UI 入口
+├─────────────┤
+│ Actions     │ ← 业务：用户意图的直接表达
+├─────────────┤
+│ Models      │ ← 模型：数据的结构化
+├─────────────┤
+│ Database    │ ← 基础设施：持久化
+└─────────────┘
+```
+
+核心原则：每一层只依赖下层，从不反向调用。
+
+**二、数据层设计（Models）：约束即文档**
+
+`models.py` - 领域的精确建模
+
+设计精髓：
+- 六实体模型直接映射各个载体：Track（轨道） → Project（项目） → Todo（行动） + Idea（萌芽） + Now（专注） + Takeaway（收获）
+- CheckConstraint 作为活文档：archived 必有 archived_at_utc，代码即规则，不依赖应用层约束，数据库自己保证完整性。
+- 双重身份设计：TodoItem.project_id 可为 NULL，优雅地统一了"结构化待办"与"收集箱待办"
+
+`database.py` - 数据库核心逻辑及初始化
+
+- 使用 `db_session` 上下文管理器 Context Manager，自动管理数据库连接的生命周期，为 actions.py 提供统一的数据库操作逻辑。
+
+**三、业务层设计（Actions）：函数即意图`
+
+`actions.py` - 业务意图的直接翻译
+
+三大设计原则：
+1. 用户语言命名：每个函数代表一个用户意图/行为
+2. Result 模式统一返回：成功/失败、数据、消息三位一体，上层无需猜测。
+3. ORM 边界清晰：Actions 内部使用 SQLAlchemy 对象，返回前解包为纯数据，上层永远不接触 ORM。
+
+核心转变：从 v0.0.2 的调用 Service 层封装（纯 CRUD 包装）转变为直接操作数据库，避免重复代码，过度设计。（重构智慧：Service 层被移除是因为它不创造价值——它只是 Models 的简单转发。）
+
+**四、状态层设计（States）：分而治之，各司其职**
+
+`states/*` - 从单体到模块化的史诗级重构
+  演进历程：
+  - v0.0.2: state_deprecated.py - 单体巨石
+  - v0.0.3: states/ (5个文件) - 视图级拆分
+
+新架构的设计精髓：
+1. AppState - 协调器模式：只管理全局切换，不持有业务数据
+2. NowState - 专注计时 \
+    NOW 行动器澄清：计时的时候不保存至数据库，而是保存在 TUI 状态中，对于 CLI，当前不设计计时功能。在停止后，用户确认之后（通常同时记录 Takeaways），才保存至数据库。
+3. StructureState - 四层导航的复杂度驯服者
+    ```python
+    class StructureLevel(Enum):
+        TRACKS                     # 1层：轨道列表
+        TRACKS_WITH_PROJECTS_T     # 2层：轨道+项目（焦点在轨道）
+        TRACKS_WITH_PROJECTS_P     # 3层：项目列表
+        TODOS                      # 4层：待办列表
+    ```
+    - 状态缓存：_current_tracks_list, _current_projects_list 避免重复查询
+    - 智能加载：load_current_lists() 根据 level 动态加载所需数据
+    - 游标状态分离：每层独立维护 _current_track_idx, _current_project_idx
+4. InfoState
+
+**五、渲染层设计（Renderer）：纯渲染**
+
+`renderer.py` - 纯渲染，不持有业务数据
+```python
+    # ✅ 只读 state 的缓存数据
+    tracks = state.structure_state.current_tracks_list
+    # ❌ 绝不调用 actions
+    # tracks = actions.list_tracks_dict().data  # FORBIDDEN!
+```
+设计亮点：
+1. 布局工具的抽象（一套工具统一所有 Box 视图的绘制）
+2. 中文宽度精确处理
+3. 分层渲染方法：**Content - Block 结构**，自顶向下的组合，每层只关心局部布局。
+
+**六、应用层设计（App）：交互的指挥中心**
+
+三大职责：
+1. 键位绑定：按键含义随模式和视图动态变化
+2. 布局组合：声明式的视图切换，不手动管理
+3. 异步计时器循环
+
+**架构演进**
+
+重构时间线
+
+| 版本    | 架构变化                   | 核心洞察                     |
+|---------|----------------------------|------------------------------|
+| v0.0.1  | TUI → Models → Database    | 初始原型                     |
+| v0.0.2  | 引入 Service 层            | 误判：Service 只是 CRUD 包装 |
+| v0.0.3a | 删除 Service，改为 Actions | 精简：用业务语义命名         |
+| v0.0.3b | State 拆分为 states/       | 分治：单体到模块化           |
+| v0.0.3c | Renderer 与 State 完全分离 | 纯化：数据缓存前移           |
+
+
+
+**代码风格及规范**
+
+自解释，减少不必要的注释，仅在必要时使用英文注释；如无必要不使用缩写，使用全称（例如 current_project_id 而不是 cur_proj_id）
+
+
+### 环境管理 (uv)
+
+使用 uv 进行依赖管理，pyproject.toml 配置 `[project.scripts]` 使 `todo` 命令可用。
+
+依赖：
 typer, prompt-toolkit, sqlalchemy
+
+### Code Hierarchy / Data Flow
+
+```
+cli.py
+    -> tui/app.run()
+        -> tui/state.AppState()
+            -> tui/renderer.Renderer(tui_state)
+        -> tui/app.key_bindings
+            -> actions: excute action
+                -> models: return model objects
+```
+
+
+### 数据库设计
+
+SQLite 数据库，路径：`~/.mukitodo/todo.db`
+
+数据库设计：
+
+Track:
+- id PRIMARY KEY
+- name NOT NULL
+- description
+- status NOT NULL, DEFAULT 'active' (active / sleeping)
+- archived: boolean, DEFAULT FALSE
+- created_at_utc NOT NULL DEFAULT CURRENT_TIMESTAMP
+- archived_at_utc
+- order_index
+
+Project:
+- id PRIMARY KEY
+- track_id NOT NULL, FOREIGN KEY REFERENCES Track(id)
+- name NOT NULL
+- description
+- deadline_utc
+- willingness_hint (0-3)
+- importance_hint (0-3)
+- urgency_hint (0-3)
+- status NOT NULL, DEFAULT 'active' (active / focusing / sleeping / cancelled / finished)
+- archived: boolean, DEFAULT FALSE
+- created_at_utc NOT NULL DEFAULT CURRENT_TIMESTAMP
+- started_at_utc
+- finished_at_utc
+- archived_at_utc
+- order_index
+
+
+TodoItem: (Structure Todo / Box Todo)
+- id PRIMARY KEY
+- project_id FOREIGN KEY REFERENCES Project(id) (nullable)
+- name NOT NULL
+- description
+- url
+- deadline_utc
+- status NOT NULL, DEFAULT 'active' (active / done / cancelled)
+- archived: boolean, DEFAULT FALSE
+- created_at_utc NOT NULL DEFAULT CURRENT_TIMESTAMP
+- completed_at_utc
+- archived_at_utc
+- order_index
+
+IdeaItem:
+- id PRIMARY KEY
+- name NOT NULL
+- description
+- maturity_hint (0-3)
+- willingness_hint (0-3)
+- status NOT NULL, DEFAULT 'active' (active / sleeping / deprecated / promoted)
+- archived: boolean, DEFAULT FALSE
+- created_at_utc NOT NULL DEFAULT CURRENT_TIMESTAMP
+- archived_at_utc
+- promoted_at_utc
+- promoted_to_project_id FOREIGN KEY REFERENCES Project(id) (nullable) DEFAULT NULL
+- order_index
+
+NowSession: (Now Action Session)
+- id PRIMARY KEY
+- project_id FOREIGN KEY REFERENCES Project(id) (nullable)
+- todo_item_id FOREIGN KEY REFERENCES TodoItem(id) (nullable)
+- duration_minutes NOT NULL
+- started_at_utc NOT NULL
+- ended_at_utc (NULL means saving on-going session)
+
+Takeaway:
+- id PRIMARY KEY
+- title NOT NULL
+- content NOT NULL
+- type NOT NULL (action / insight)
+- date NOT NULL
+- created_at_utc NOT NULL DEFAULT CURRENT_TIMESTAMP
+- track_id FOREIGN KEY REFERENCES Track(id) (nullable)
+- project_id FOREIGN KEY REFERENCES Project(id) (nullable)
+- todo_item_id FOREIGN KEY REFERENCES TodoItem(id) (nullable)
+- now_session_id FOREIGN KEY REFERENCES NowSession(id) (nullable)

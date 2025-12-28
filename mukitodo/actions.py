@@ -1,136 +1,1120 @@
 from dataclasses import dataclass
-from enum import Enum
+from datetime import datetime, date as date_type, timezone
+from typing import Any
 
-from mukitodo.services import TrackService, ProjectService, TodoItemService
-from mukitodo.models import Track, Project, TodoItem
+from mukitodo.database import db_session
+from mukitodo.models import Track, Project, TodoItem, IdeaItem, NowSession, Takeaway
 
 
 @dataclass
 class Result:
+    success: bool | None = None # None only for EmptyResult
+    data: Any = None
     message: str = ""
-    success: bool | None = None
 
-EmptyResult = Result("", None)
-
-
-def list_tracks() -> list[Track]:
-    return TrackService().list_all()
+EmptyResult = Result(None, None, "")
 
 
-def list_projects(track_id: int) -> list[Project]:
-    return ProjectService().list_by_track_id(track_id)
+# == Track Actions ========================================================
 
+# Basic CRUD
 
-def list_todos(project_id: int) -> list[TodoItem]:
-    return TodoItemService().list_by_project_id(project_id)
-
-
-def get_track(track_id: int) -> Track | None:
-    return TrackService().get_by_id(track_id)
-
-
-def get_project(project_id: int) -> Project | None:
-    return ProjectService().get_by_id(project_id)
-
-
-def get_todo(todo_id: int) -> TodoItem | None:
-    return TodoItemService().get_by_id(todo_id)
-
-
-def add_track(name: str) -> Result:
+def create_track(name: str, description: str | None = None) -> Result:
+    '''Create a new track. Result.data: track_id. Default status: active'''
     if not name:
-        return Result("Track name required", False)
-    track = TrackService().add(name)
-    if track:
-        return Result(f"Track '{name}' created", True)
-    return Result("Failed to create track", False)
-
-
-def add_project(track_id: int, name: str) -> Result:
-    if not name:
-        return Result("Project name required", False)
-    project = ProjectService().add_by_track_id(track_id, name)
-    if project:
-        return Result(f"Project '{name}' created", True)
-    return Result("Failed to create project", False)
-
-
-def add_todo(project_id: int, content: str) -> Result:
-    if not content:
-        return Result("Todo content required", False)
-    item = TodoItemService().add_by_project_id(project_id, content)
-    if item:
-        return Result("Todo added", True)
-    return Result("Failed to add todo", False)
-
+        return Result(False, None, "Track name is required")
+    
+    with db_session() as session:
+        track = Track(name=name, description=description)
+        session.add(track)
+        session.flush()  # Get track.id
+        track_id = track.id
+        track_name = track.name
+    
+    return Result(True, track_id, f"Track '{track_name}' created successfully")
 
 def delete_track(track_id: int) -> Result:
-    track = TrackService().get_by_id(track_id)
-    if not track:
-        return Result("Track not found", False)
-    track_name = track.name
-    if TrackService().delete_by_id(track_id):
-        return Result(f"Track '{track_name}' deleted", True)
-    return Result("Failed to delete track", False)
-
-
-def delete_project(project_id: int) -> Result:
-    project = ProjectService().get_by_id(project_id)
-    if not project:
-        return Result("Project not found", False)
-    project_name = project.name
-    if ProjectService().delete_by_id(project_id):
-        return Result(f"Project '{project_name}' deleted", True)
-    return Result("Failed to delete project", False)
-
-
-def delete_todo(todo_id: int) -> Result:
-    if TodoItemService().delete_by_id(todo_id):
-        return Result("Todo deleted", True)
-    return Result("Todo not found", False)
-
-
-def toggle_todo(todo_id: int) -> Result:
-    item = TodoItemService().get_by_id(todo_id)
-    if not item:
-        return Result("Todo not found", False)
+    '''Delete a track. Result.data: (deleted) track.name'''
+    with db_session() as session:
+        track = session.query(Track).filter_by(id=track_id).first()
+        if not track:
+            return Result(False, None, f"Track '{track_id}' not found")
+        
+        track_name = track.name
+        session.delete(track)
     
-    if TodoItemService().toggle_by_id(todo_id):
-        status = "completed" if item.status == "active" else "active"
-        return Result(f"Todo marked as {status}", True)
-    return Result("Failed to toggle todo", False)
+    return Result(True, track_name, f"Track '{track_name}' deleted successfully")
 
+def list_tracks_id() -> Result:
+    '''List all track ids. Result.data: list of track ids'''
+    with db_session() as session:
+        tracks = session.query(Track).filter_by(archived=False).all()
+        data = [t.id for t in tracks]
+    
+    return Result(True, data, f"Found {len(tracks)} tracks")
+
+def list_tracks_dict() -> Result:
+    '''List all tracks as dict. Result.data: list[dict]'''
+    with db_session() as session:
+        tracks = session.query(Track).filter_by(archived=False).all()
+        data = [t.to_dict() for t in tracks]
+
+    return Result(True, data, f"Found {len(tracks)} tracks")
+
+def get_track_dict(track_id: int) -> Result:
+    '''Get a track by id. Result.data: track dict'''
+    with db_session() as session:
+        track = session.query(Track).filter_by(id=track_id).first()
+        
+        if not track:
+            return Result(False, None, f"Track {track_id} not found")
+        
+        track_dict = track.to_dict()
+        track_name = track.name
+    
+    return Result(True, track_dict, f"Track '{track_name}' retrieved")
 
 def rename_track(track_id: int, new_name: str) -> Result:
+    '''Rename a track. Result.data: (new) track_name'''
     if not new_name:
-        return Result("Track name required", False)
-    track = TrackService().get_by_id(track_id)
-    if not track:
-        return Result("Track not found", False)
-    old_name = track.name
-    if TrackService().rename(track_id, new_name):
-        return Result(f"Track renamed from '{old_name}' to '{new_name}'", True)
-    return Result("Failed to rename track", False)
+        return Result(False, None, "Track name is required")
+    
+    with db_session() as session:
+        track = session.query(Track).filter_by(id=track_id).first()
+        if not track:
+            return Result(False, None, f"Track {track_id} not found")
+        
+        old_name = track.name
+        track.name = new_name
+    
+    return Result(True, new_name, f"Track renamed from '{old_name}' to '{new_name}'")
 
+def update_track_description(track_id: int, description: str) -> Result:
+    '''Update a track's description. Result.data: (new) description'''
+    with db_session() as session:
+        track = session.query(Track).filter_by(id=track_id).first()
+        if not track:
+            return Result(False, None, f"Track {track_id} not found")
+        
+        track_name = track.name
+        track.description = description
+    
+    return Result(True, description, f"Track '{track_name}' description updated")
+
+
+def activate_track(track_id: int) -> Result:
+    '''Activate a track. Result.data: None'''
+    with db_session() as session:
+        track = session.query(Track).filter_by(id=track_id).first()
+        if not track:
+            return Result(False, None, f"Track {track_id} not found")
+        
+        track_name = track.name
+        track.status = "active"
+    
+    return Result(True, None, f"Track '{track_name}' activated")
+
+def sleep_track(track_id: int) -> Result:
+    '''Sleep a track. Result.data: None'''
+    with db_session() as session:
+        track = session.query(Track).filter_by(id=track_id).first()
+        if not track:
+            return Result(False, None, f"Track {track_id} not found")
+        
+        track_name = track.name
+        track.status = "sleeping"
+    
+    return Result(True, None, f"Track '{track_name}' set to sleeping")
+
+
+def archive_track(track_id: int) -> Result:
+    '''Archive a track. Result.data: None'''
+    with db_session() as session:
+        track = session.query(Track).filter_by(id=track_id).first()
+        if not track:
+            return Result(False, None, f"Track {track_id} not found")
+        
+        track_name = track.name
+        track.archived = True
+        track.archived_at_utc = datetime.now(timezone.utc)
+    
+    return Result(True, None, f"Track '{track_name}' archived")
+
+def unarchive_track(track_id: int) -> Result:
+    '''Unarchive a track. Result.data: None'''
+    with db_session() as session:
+        track = session.query(Track).filter_by(id=track_id).first()
+        if not track:
+            return Result(False, None, f"Track {track_id} not found")
+        
+        track_name = track.name
+        track.archived = False
+        track.archived_at_utc = None
+    
+    return Result(True, None, f"Track '{track_name}' unarchived")
+
+# def reorder ...
+
+
+
+
+# == Project Actions ========================================================
+
+def create_project(
+    track_id: int,
+    name: str,
+    description: str | None = None,
+    deadline: datetime | None = None,
+    willingness_hint: int | None = None,
+    importance_hint: int | None = None,
+    urgency_hint: int | None = None,
+    promoted_by_idea_item_id: int | None = None
+) -> Result:
+    '''Create a new project. Result.data: project_id. Default status: active'''
+    if not name:
+        return Result(False, None, "Project name is required")
+    
+    with db_session() as session:
+        project = Project(
+            track_id=track_id,
+            name=name,
+            description=description,
+            deadline_utc=deadline,
+            willingness_hint=willingness_hint,
+            importance_hint=importance_hint,
+            urgency_hint=urgency_hint
+        )
+        session.add(project)
+        session.flush()  # Get project.id
+        
+        if promoted_by_idea_item_id:
+            idea = session.query(IdeaItem).filter_by(id=promoted_by_idea_item_id).first()
+            if idea:
+                idea.status = 'promoted'
+                idea.promoted_at_utc = datetime.now(timezone.utc)
+                idea.promoted_to_project_id = project.id
+        
+        project_id = project.id
+        project_name = project.name
+    
+    return Result(True, project_id, f"Project '{project_name}' created successfully")
+
+def delete_project(project_id: int) -> Result:
+    '''Delete a project. Result.data: project_name'''
+    with db_session() as session:
+        project = session.query(Project).filter_by(id=project_id).first()
+        if not project:
+            return Result(False, None, f"Project {project_id} not found")
+        
+        project_name = project.name
+        session.delete(project)
+    
+    return Result(True, project_name, f"Project '{project_name}' deleted successfully")
+
+def list_projects_id(track_id: int) -> Result:
+    '''List all project ids. Result.data: list of project ids'''
+    with db_session() as session:
+        projects = session.query(Project).filter_by(track_id=track_id, archived=False).all()
+        data = [p.id for p in projects]
+
+    return Result(True, data, f"Found {len(projects)} projects")
+
+def list_projects_dict(track_id: int) -> Result:
+    '''List all projects as dict. Result.data: list[dict]'''
+    with db_session() as session:
+        projects = session.query(Project).filter_by(track_id=track_id, archived=False).all()
+        data = [p.to_dict() for p in projects]
+
+    return Result(True, data, f"Found {len(projects)} projects")
+
+def get_project_dict(project_id: int) -> Result:
+    '''Get a project by id. Result.data: project dict'''
+    with db_session() as session:
+        project = session.query(Project).filter_by(id=project_id).first()
+        
+        if not project:
+            return Result(False, None, f"Project {project_id} not found")
+        
+        data = project.to_dict()
+        project_name = project.name
+    
+    return Result(True, data, f"Project '{project_name}' retrieved")
 
 def rename_project(project_id: int, new_name: str) -> Result:
+    '''Rename a project. Result.data: (new) project_name'''
     if not new_name:
-        return Result("Project name required", False)
-    project = ProjectService().get_by_id(project_id)
-    if not project:
-        return Result("Project not found", False)
-    old_name = project.name
-    if ProjectService().rename(project_id, new_name):
-        return Result(f"Project renamed from '{old_name}' to '{new_name}'", True)
-    return Result("Failed to rename project", False)
+        return Result(False, None, "Project name is required")
+    
+    with db_session() as session:
+        project = session.query(Project).filter_by(id=project_id).first()
+        if not project:
+            return Result(False, None, f"Project {project_id} not found")
+        
+        old_name = project.name
+        project.name = new_name
+    
+    return Result(True, new_name, f"Project renamed from '{old_name}' to '{new_name}'")
+
+def update_project_description(project_id: int, description: str) -> Result:
+    '''Update a project's description. Result.data: (new) description'''
+    with db_session() as session:
+        project = session.query(Project).filter_by(id=project_id).first()
+        if not project:
+            return Result(False, None, f"Project {project_id} not found")
+        
+        project_name = project.name
+        project.description = description
+    
+    return Result(True, description, f"Project '{project_name}' description updated")
+
+def update_project_deadline(project_id: int, deadline: datetime | None) -> Result:
+    '''Update a project's deadline. Result.data: (new) deadline'''
+    with db_session() as session:
+        project = session.query(Project).filter_by(id=project_id).first()
+        if not project:
+            return Result(False, None, f"Project {project_id} not found")
+        
+        project_name = project.name
+        project.deadline_utc = deadline
+    
+    return Result(True, deadline, f"Project '{project_name}' deadline updated")
+
+def update_project_hints(
+    project_id: int,
+    willingness_hint: int | None = None,
+    importance_hint: int | None = None,
+    urgency_hint: int | None = None,
+) -> Result:
+    '''Update a project's hints. Result.data: None'''
+    with db_session() as session:
+        project = session.query(Project).filter_by(id=project_id).first()
+        if not project:
+            return Result(False, None, f"Project {project_id} not found")
+        
+        if willingness_hint is not None:
+            project.willingness_hint = willingness_hint
+        if importance_hint is not None:
+            project.importance_hint = importance_hint
+        if urgency_hint is not None:
+            project.urgency_hint = urgency_hint
+        
+        project_name = project.name
+    
+    return Result(True, None, f"Project '{project_name}' hints updated")
 
 
-def rename_todo(todo_id: int, new_content: str) -> Result:
-    if not new_content:
-        return Result("Todo content required", False)
-    todo = TodoItemService().get_by_id(todo_id)
-    if not todo:
-        return Result("Todo not found", False)
-    if TodoItemService().rename(todo_id, new_content):
-        return Result(f"Todo renamed to '{new_content}'", True)
-    return Result("Failed to rename todo", False)
+def activate_project(project_id: int) -> Result:
+    '''Activate a project. Result.data: None'''
+    with db_session() as session:
+        project = session.query(Project).filter_by(id=project_id).first()
+        if not project:
+            return Result(False, None, f"Project {project_id} not found")
+        
+        project_name = project.name
+        project.status = "active"
+    
+    return Result(True, None, f"Project '{project_name}' activated")
+
+def focus_project(project_id: int) -> Result:
+    '''Focus a project. Result.data: None'''
+    with db_session() as session:
+        project = session.query(Project).filter_by(id=project_id).first()
+        if not project:
+            return Result(False, None, f"Project {project_id} not found")
+        
+        project_name = project.name
+        project.status = "focusing"
+    
+    return Result(True, None, f"Project '{project_name}' set to focusing")
+
+def sleep_project(project_id: int) -> Result:
+    '''Sleep a project. Result.data: None'''
+    with db_session() as session:
+        project = session.query(Project).filter_by(id=project_id).first()
+        if not project:
+            return Result(False, None, f"Project {project_id} not found")
+        
+        project_name = project.name
+        project.status = "sleeping"
+    
+    return Result(True, None, f"Project '{project_name}' set to sleeping")
+
+def cancel_project(project_id: int) -> Result:
+    '''Cancel a project. Result.data: None'''
+    with db_session() as session:
+        project = session.query(Project).filter_by(id=project_id).first()
+        if not project:
+            return Result(False, None, f"Project {project_id} not found")
+        
+        project_name = project.name
+        project.status = "cancelled"
+    
+    return Result(True, None, f"Project '{project_name}' cancelled")
+
+def finish_project(project_id: int) -> Result:
+    '''Finish a project. Result.data: None'''
+    with db_session() as session:
+        project = session.query(Project).filter_by(id=project_id).first()
+        if not project:
+            return Result(False, None, f"Project {project_id} not found")
+        
+        project_name = project.name
+        project.status = "finished"
+    
+    return Result(True, None, f"Project '{project_name}' finished")
+
+
+def archive_project(project_id: int) -> Result:
+    '''Archive a project. Result.data: None'''
+    with db_session() as session:
+        project = session.query(Project).filter_by(id=project_id).first()
+        if not project:
+            return Result(False, None, f"Project {project_id} not found")
+        
+        project_name = project.name
+        project.archived = True
+        project.archived_at_utc = datetime.now(timezone.utc)
+    
+    return Result(True, None, f"Project '{project_name}' archived")
+
+def unarchive_project(project_id: int) -> Result:
+    '''Unarchive a project. Result.data: None'''
+    with db_session() as session:
+        project = session.query(Project).filter_by(id=project_id).first()
+        if not project:
+            return Result(False, None, f"Project {project_id} not found")
+        
+        project_name = project.name
+        project.archived = False
+        project.archived_at_utc = None
+    
+    return Result(True, None, f"Project '{project_name}' unarchived")
+
+
+# def reorder ...
+
+
+
+
+
+# == TodoItem Actions - Structure & Box Level =====================================
+
+def create_structure_todo(
+    project_id: int,
+    name: str,
+    description: str | None = None,
+    url: str | None = None,
+    deadline: datetime | None = None
+) -> Result:
+    '''Create a new structure todo item. Result.data: todo_item_id. Default status: active'''
+    if not name:
+        return Result(False, None, "Todo name is required")
+    
+    with db_session() as session:
+        todo = TodoItem(
+            project_id=project_id,
+            name=name,
+            description=description,
+            url=url,
+            deadline_utc=deadline
+        )
+        session.add(todo)
+        session.flush()  # Get todo.id
+        todo_id = todo.id
+        todo_name = todo.name
+    
+    return Result(True, todo_id, f"Todo '{todo_name}' created successfully")
+
+
+
+def create_box_todo(
+    name: str,
+    description: str | None = None,
+    url: str | None = None,
+    deadline: datetime | None = None
+) -> Result:
+    '''Create a new box todo item. Result.data: todo_item_id. Default status: active'''
+    if not name:
+        return Result(False, None, "Todo name is required")
+    
+    with db_session() as session:
+        todo = TodoItem(
+            project_id=None,
+            name=name,
+            description=description,
+            url=url,
+            deadline_utc=deadline
+        )
+        session.add(todo)
+        session.flush()  # Get todo.id
+        todo_id = todo.id
+        todo_name = todo.name
+    
+    return Result(True, todo_id, f"Box todo '{todo_name}' created successfully")
+
+
+
+def delete_todo(todo_item_id: int) -> Result:
+    '''Delete a todo item. Result.data: None'''
+    with db_session() as session:
+        todo = session.query(TodoItem).filter_by(id=todo_item_id).first()
+        if not todo:
+            return Result(False, None, f"Todo {todo_item_id} not found")
+        
+        session.delete(todo)
+    
+    return Result(True, None, f"Todo deleted successfully")
+
+def list_structure_todos(project_id: int) -> Result:
+    '''List all structure todo items. Result.data: list of todo ids'''
+    with db_session() as session:
+        todos = session.query(TodoItem).filter_by(project_id=project_id, archived=False).all()
+        data = [t.id for t in todos]
+
+    return Result(True, data, f"Found {len(todos)} todos")
+
+def list_structure_todos_dict(project_id: int) -> Result:
+    '''List all structure todo items as dict. Result.data: list[dict]'''
+    with db_session() as session:
+        todos = session.query(TodoItem).filter_by(project_id=project_id, archived=False).all()
+        data = [t.to_dict() for t in todos]
+
+    return Result(True, data, f"Found {len(todos)} todos")
+
+def list_box_todos() -> Result:
+    '''List all box todo items. Result.data: list of todo ids'''
+    with db_session() as session:
+        todos = session.query(TodoItem).filter_by(project_id=None, archived=False).all()
+        data = [t.id for t in todos]
+    
+    return Result(True, data, f"Found {len(todos)} box todos")
+
+def get_todo_dict(todo_item_id: int) -> Result:
+    '''Get a todo item by id. Result.data: todo dict'''
+    with db_session() as session:
+        todo = session.query(TodoItem).filter_by(id=todo_item_id).first()
+        
+        if not todo:
+            return Result(False, None, f"Todo {todo_item_id} not found")
+        
+        data = todo.to_dict()
+        todo_name = todo.name
+    
+    return Result(True, data, f"Todo '{todo_name}' retrieved")
+
+
+def rename_todo(todo_item_id: int, new_name: str) -> Result:
+    '''Rename a todo item. Result.data: (new) todo_item_name'''
+    if not new_name:
+        return Result(False, None, "Todo name is required")
+    
+    with db_session() as session:
+        todo = session.query(TodoItem).filter_by(id=todo_item_id).first()
+        if not todo:
+            return Result(False, None, f"Todo {todo_item_id} not found")
+        
+        old_name = todo.name
+        todo.name = new_name
+    
+    return Result(True, new_name, f"Todo renamed from '{old_name}' to '{new_name}'")
+
+def update_todo_description(todo_item_id: int, description: str) -> Result:
+    '''Update a todo item's description. Result.data: (new) description'''
+    with db_session() as session:
+        todo = session.query(TodoItem).filter_by(id=todo_item_id).first()
+        if not todo:
+            return Result(False, None, f"Todo {todo_item_id} not found")
+        
+        todo_name = todo.name
+        todo.description = description
+    
+    return Result(True, description, f"Todo '{todo_name}' description updated")
+
+def update_todo_url(todo_item_id: int, url: str) -> Result:
+    '''Update a todo item's url. Result.data: (new) url'''
+    with db_session() as session:
+        todo = session.query(TodoItem).filter_by(id=todo_item_id).first()
+        if not todo:
+            return Result(False, None, f"Todo {todo_item_id} not found")
+        
+        todo_name = todo.name
+        todo.url = url
+    
+    return Result(True, url, f"Todo '{todo_name}' url updated")
+
+def update_todo_deadline(todo_item_id: int, deadline: datetime | None) -> Result:
+    '''Update a todo item's deadline. Result.data: (new) deadline'''
+    with db_session() as session:
+        todo = session.query(TodoItem).filter_by(id=todo_item_id).first()
+        if not todo:
+            return Result(False, None, f"Todo {todo_item_id} not found")
+        
+        todo_name = todo.name
+        todo.deadline_utc = deadline
+    
+    return Result(True, deadline, f"Todo '{todo_name}' deadline updated")
+
+
+def activate_todo(todo_item_id: int) -> Result:
+    '''Activate / Undo a todo item. Result.data: None'''
+    with db_session() as session:
+        todo = session.query(TodoItem).filter_by(id=todo_item_id).first()
+        if not todo:
+            return Result(False, None, f"Todo {todo_item_id} not found")
+        
+        todo_name = todo.name
+        todo.status = "active"
+        todo.completed_at_utc = None
+    
+    return Result(True, None, f"Todo '{todo_name}' activated")
+
+def done_todo(todo_item_id: int) -> Result:
+    '''Mark a todo item as done. Result.data: None'''
+    with db_session() as session:
+        todo = session.query(TodoItem).filter_by(id=todo_item_id).first()
+        if not todo:
+            return Result(False, None, f"Todo {todo_item_id} not found")
+        
+        todo_name = todo.name
+        todo.status = "done"
+        todo.completed_at_utc = datetime.now(timezone.utc)
+    
+    return Result(True, None, f"Todo '{todo_name}' marked as done")
+
+def cancel_todo(todo_item_id: int) -> Result:
+    '''Cancel a todo item. Result.data: None'''
+    with db_session() as session:
+        todo = session.query(TodoItem).filter_by(id=todo_item_id).first()
+        if not todo:
+            return Result(False, None, f"Todo {todo_item_id} not found")
+        
+        todo_name = todo.name
+        todo.status = "cancelled"
+    
+    return Result(True, None, f"Todo '{todo_name}' cancelled")
+
+
+def archive_todo(todo_item_id: int) -> Result:
+    '''Archive a todo item. Result.data: None'''
+    with db_session() as session:
+        todo = session.query(TodoItem).filter_by(id=todo_item_id).first()
+        if not todo:
+            return Result(False, None, f"Todo {todo_item_id} not found")
+        
+        todo_name = todo.name
+        todo.archived = True
+        todo.archived_at_utc = datetime.now(timezone.utc)
+    
+    return Result(True, None, f"Todo '{todo_name}' archived")
+
+def unarchive_todo(todo_item_id: int) -> Result:
+    '''Unarchive a todo item. Result.data: None'''
+    with db_session() as session:
+        todo = session.query(TodoItem).filter_by(id=todo_item_id).first()
+        if not todo:
+            return Result(False, None, f"Todo {todo_item_id} not found")
+        
+        todo_name = todo.name
+        todo.archived = False
+        todo.archived_at_utc = None
+    
+    return Result(True, None, f"Todo '{todo_name}' unarchived")
+
+
+def move_todo_to_project(todo_item_id: int, project_id: int) -> Result:
+    '''Move a todo item to a project. Result.data: todo_item_id'''
+    with db_session() as session:
+        todo = session.query(TodoItem).filter_by(id=todo_item_id).first()
+        if not todo:
+            return Result(False, None, f"Todo {todo_item_id} not found")
+        
+        todo_name = todo.name
+        todo.project_id = project_id
+    
+    return Result(True, todo_item_id, f"Todo '{todo_name}' moved to project {project_id}")
+
+def move_todo_to_box(todo_item_id: int) -> Result:
+    '''Move a todo item to the box. Result.data: todo_item_id'''
+    with db_session() as session:
+        todo = session.query(TodoItem).filter_by(id=todo_item_id).first()
+        if not todo:
+            return Result(False, None, f"Todo {todo_item_id} not found")
+        
+        todo_name = todo.name
+        todo.project_id = None
+    
+    return Result(True, todo_item_id, f"Todo '{todo_name}' moved to box")
+
+
+# def reorder ...
+
+
+
+
+# == IdeaItem Actions ========================================================
+
+def create_idea_item(
+    name: str,
+    description: str | None = None,
+    maturity_hint: int | None = None,
+    willingness_hint: int | None = None,
+) -> Result:
+    '''Create a new idea item. Result.data: idea_item_id. Default status: active'''
+    if not name:
+        return Result(False, None, "Idea name is required")
+    
+    with db_session() as session:
+        idea = IdeaItem(
+            name=name,
+            description=description,
+            maturity_hint=maturity_hint,
+            willingness_hint=willingness_hint
+        )
+        session.add(idea)
+        session.flush()  # Get idea.id
+        idea_id = idea.id
+        idea_name = idea.name
+    
+    return Result(True, idea_id, f"Idea '{idea_name}' created successfully")
+
+def delete_idea_item(idea_item_id: int) -> Result:
+    '''Delete an idea item. Result.data: None'''
+    with db_session() as session:
+        idea = session.query(IdeaItem).filter_by(id=idea_item_id).first()
+        if not idea:
+            return Result(False, None, f"Idea {idea_item_id} not found")
+        
+        session.delete(idea)
+    
+    return Result(True, None, f"Idea deleted successfully")
+
+def list_idea_items() -> Result:
+    '''List all idea items. Result.data: list of idea ids'''
+    with db_session() as session:
+        ideas = session.query(IdeaItem).filter_by(archived=False).all()
+        data = [i.id for i in ideas]
+    
+    return Result(True, data, f"Found {len(ideas)} ideas")
+
+def get_idea_item(idea_item_id: int) -> Result:
+    '''Get an idea item by id. Result.data: idea dict'''
+    with db_session() as session:
+        idea = session.query(IdeaItem).filter_by(id=idea_item_id).first()
+        
+        if not idea:
+            return Result(False, None, f"Idea {idea_item_id} not found")
+        
+        data = idea.to_dict()
+        idea_name = idea.name
+    
+    return Result(True, data, f"Idea '{idea_name}' retrieved")
+
+
+def rename_idea_item(idea_item_id: int, new_name: str) -> Result:
+    '''Rename an idea item. Result.data: (new) idea_item_name'''
+    if not new_name:
+        return Result(False, None, "Idea name is required")
+    
+    with db_session() as session:
+        idea = session.query(IdeaItem).filter_by(id=idea_item_id).first()
+        if not idea:
+            return Result(False, None, f"Idea {idea_item_id} not found")
+        
+        old_name = idea.name
+        idea.name = new_name
+    
+    return Result(True, new_name, f"Idea renamed from '{old_name}' to '{new_name}'")
+
+def update_idea_item_description(idea_item_id: int, description: str) -> Result:
+    '''Update an idea item's description. Result.data: (new) description'''
+    with db_session() as session:
+        idea = session.query(IdeaItem).filter_by(id=idea_item_id).first()
+        if not idea:
+            return Result(False, None, f"Idea {idea_item_id} not found")
+        
+        idea_name = idea.name
+        idea.description = description
+    
+    return Result(True, description, f"Idea '{idea_name}' description updated")
+
+def update_idea_item_hints(
+    idea_item_id: int,
+    maturity_hint: int | None = None,
+    willingness_hint: int | None = None,
+) -> Result:
+    '''Update an idea item's hints. Result.data: None'''
+    with db_session() as session:
+        idea = session.query(IdeaItem).filter_by(id=idea_item_id).first()
+        if not idea:
+            return Result(False, None, f"Idea {idea_item_id} not found")
+        
+        if maturity_hint is not None:
+            idea.maturity_hint = maturity_hint
+        if willingness_hint is not None:
+            idea.willingness_hint = willingness_hint
+        
+        idea_name = idea.name
+    
+    return Result(True, None, f"Idea '{idea_name}' hints updated")
+
+
+def activate_idea_item(idea_item_id: int) -> Result:
+    '''Activate / Undo an idea item. Result.data: None'''
+    with db_session() as session:
+        idea = session.query(IdeaItem).filter_by(id=idea_item_id).first()
+        if not idea:
+            return Result(False, None, f"Idea {idea_item_id} not found")
+        
+        idea_name = idea.name
+        idea.status = "active"
+    
+    return Result(True, None, f"Idea '{idea_name}' activated")
+
+def sleep_idea_item(idea_item_id: int) -> Result:
+    '''Sleep an idea item. Result.data: None'''
+    with db_session() as session:
+        idea = session.query(IdeaItem).filter_by(id=idea_item_id).first()
+        if not idea:
+            return Result(False, None, f"Idea {idea_item_id} not found")
+        
+        idea_name = idea.name
+        idea.status = "sleeping"
+    
+    return Result(True, None, f"Idea '{idea_name}' set to sleeping")
+
+def deprecate_idea_item(idea_item_id: int) -> Result:
+    '''Mark an idea item as deprecated. Result.data: None'''
+    with db_session() as session:
+        idea = session.query(IdeaItem).filter_by(id=idea_item_id).first()
+        if not idea:
+            return Result(False, None, f"Idea {idea_item_id} not found")
+        
+        idea_name = idea.name
+        idea.status = "deprecated"
+    
+    return Result(True, None, f"Idea '{idea_name}' marked as deprecated")
+
+def promote_idea_item_to_project(idea_item_id: int, track_id: int) -> Result:
+    '''Promote an idea item to a project under a track. Result.data: (new) project_id. Irreversible operation.'''
+    with db_session() as session:
+        idea = session.query(IdeaItem).filter_by(id=idea_item_id).first()
+        if not idea:
+            return Result(False, None, f"Idea {idea_item_id} not found")
+        
+        # Create project from idea
+        project = Project(
+            track_id=track_id,
+            name=idea.name,
+            description=idea.description,
+            willingness_hint=idea.willingness_hint,
+        )
+        session.add(project)
+        session.flush()  # Get project.id
+        
+        # Update idea status
+        idea.status = 'promoted'
+        idea.promoted_at_utc = datetime.now(timezone.utc)
+        idea.promoted_to_project_id = project.id
+        
+        project_id = project.id
+        idea_name = idea.name
+    
+    return Result(True, project_id, f"Idea '{idea_name}' promoted to project {project_id}")
+
+
+def archive_idea_item(idea_item_id: int) -> Result:
+    '''Archive an idea item. Result.data: None'''
+    with db_session() as session:
+        idea = session.query(IdeaItem).filter_by(id=idea_item_id).first()
+        if not idea:
+            return Result(False, None, f"Idea {idea_item_id} not found")
+        
+        idea_name = idea.name
+        idea.archived = True
+        idea.archived_at_utc = datetime.now(timezone.utc)
+    
+    return Result(True, None, f"Idea '{idea_name}' archived")
+
+def unarchive_idea_item(idea_item_id: int) -> Result:
+    '''Unarchive an idea item. Result.data: None'''
+    with db_session() as session:
+        idea = session.query(IdeaItem).filter_by(id=idea_item_id).first()
+        if not idea:
+            return Result(False, None, f"Idea {idea_item_id} not found")
+        
+        idea_name = idea.name
+        idea.archived = False
+        idea.archived_at_utc = None
+    
+    return Result(True, None, f"Idea '{idea_name}' unarchived")
+
+# def reorder ...
+
+
+
+# == Box Actions ========================================================
+
+
+# == NowSession Actions ========================================================
+
+def save_session(
+    project_id: int | None,
+    todo_item_id: int | None,
+    duration_minutes: int,
+    started_at_utc: datetime,
+    ended_at_utc: datetime | None = None
+) -> Result:
+    '''Save a now session. Result.data: now_session_id'''
+    with db_session() as session:
+        now_session = NowSession(
+            project_id=project_id,
+            todo_item_id=todo_item_id,
+            duration_minutes=duration_minutes,
+            started_at_utc=started_at_utc,
+            ended_at_utc=ended_at_utc
+        )
+        session.add(now_session)
+        session.flush()  # Get now_session.id
+        now_session_id = now_session.id
+    
+    return Result(True, now_session_id, f"Session {now_session_id} saved successfully")
+
+def recover_session() -> Result:
+    '''Recover a now session. Result.data: session dict'''
+    with db_session() as session:
+        now_session = session.query(NowSession).filter_by(ended_at_utc=None).first()
+        if not now_session:
+            return Result(False, None, "No unfinished session found")
+        
+        data = {
+            "id": now_session.id,
+            "project_id": now_session.project_id,
+            "todo_item_id": now_session.todo_item_id,
+            "duration_minutes": now_session.duration_minutes,
+            "started_at_utc": now_session.started_at_utc,
+            "ended_at_utc": now_session.ended_at_utc
+        }
+        session_id = now_session.id
+    
+    return Result(True, data, f"Unfinished session {session_id} recovered")
+
+
+def delete_session(now_session_id: int) -> Result:
+    '''Delete a now session. Result.data: None'''
+    with db_session() as session:
+        now_session = session.query(NowSession).filter_by(id=now_session_id).first()
+        if not now_session:
+            return Result(False, None, f"Session {now_session_id} not found")
+        
+        session.delete(now_session)
+    
+    return Result(True, None, f"Session deleted successfully")
+
+def list_sessions(track_id: int) -> Result:
+    '''List all now sessions. Result.data: list of session ids'''
+    with db_session() as session:
+        sessions = session.query(NowSession).join(Project).filter(Project.track_id == track_id).all()
+        data = [s.id for s in sessions]
+    
+    return Result(True, data, f"Found {len(sessions)} sessions")
+
+# more list actions in different contexts
+
+def get_session(now_session_id: int) -> Result:
+    '''Get a now session by id. Result.data: session dict'''
+    with db_session() as session:
+        now_session = session.query(NowSession).filter_by(id=now_session_id).first()
+        
+        if not now_session:
+            return Result(False, None, f"Session {now_session_id} not found")
+        
+        data = now_session.to_dict()
+        session_id = now_session.id
+    
+    return Result(True, data, f"Session {session_id} retrieved")
+
+
+
+def link_session_to_takeaway(now_session_id: int, takeaway_id: int) -> Result:
+    '''Link a now session to a takeaway. Result.data: None'''
+    with db_session() as session:
+        now_session = session.query(NowSession).filter_by(id=now_session_id).first()
+        if not now_session:
+            return Result(False, None, f"Session {now_session_id} not found")
+        
+        takeaway = session.query(Takeaway).filter_by(id=takeaway_id).first()
+        if not takeaway:
+            return Result(False, None, f"Takeaway {takeaway_id} not found")
+    
+    return Result(False, None, "Link session to takeaway: not implemented")
+
+
+
+
+
+
+
+# == Takeaway Actions ========================================================
+
+def create_takeaway(
+    title: str | None,
+    content: str,
+    type: str,
+    date: date_type,
+    track_id: int | None = None,
+    project_id: int | None = None,
+    todo_item_id: int | None = None,
+    now_session_id: int | None = None
+) -> Result:
+    '''Create a new takeaway. Result.data: takeaway_id. If title is None, it will be auto generated.'''
+    if not content:
+        return Result(False, None, "Takeaway content is required")
+    
+    if not title:
+        title = content[:30] + "..." if len(content) > 30 else content
+    
+    with db_session() as session:
+        takeaway = Takeaway(
+            title=title,
+            content=content,
+            type=type,
+            date=date,
+            track_id=track_id,
+            project_id=project_id,
+            todo_item_id=todo_item_id,
+            now_session_id=now_session_id
+        )
+        session.add(takeaway)
+        session.flush()  # Get takeaway.id
+        takeaway_id = takeaway.id
+        takeaway_title = takeaway.title
+    
+    return Result(True, takeaway_id, f"Takeaway '{takeaway_title}' created successfully")
+
+
+def delete_takeaway(takeaway_id: int) -> Result:
+    '''Delete a takeaway. Result.data: None'''
+    with db_session() as session:
+        takeaway = session.query(Takeaway).filter_by(id=takeaway_id).first()
+        if not takeaway:
+            return Result(False, None, f"Takeaway {takeaway_id} not found")
+        
+        session.delete(takeaway)
+    
+    return Result(True, None, f"Takeaway deleted successfully")
+
+def list_takeaways(track_id: int) -> Result:
+    '''List all takeaways. Result.data: list of takeaway ids'''
+    with db_session() as session:
+        takeaways = session.query(Takeaway).filter_by(track_id=track_id).all()
+        data = [t.id for t in takeaways]
+    
+    return Result(True, data, f"Found {len(takeaways)} takeaways")
+
+# more list actions in different contexts
+
+def get_takeaway(takeaway_id: int) -> Result:
+    '''Get a takeaway by id. Result.data: takeaway dict'''
+    with db_session() as session:
+        takeaway = session.query(Takeaway).filter_by(id=takeaway_id).first()
+        
+        if not takeaway:
+            return Result(False, None, f"Takeaway {takeaway_id} not found")
+        
+        data = takeaway.to_dict()
+        takeaway_title = takeaway.title
+    
+    return Result(True, data, f"Takeaway '{takeaway_title}' retrieved")
+
+def update_takeaway_type(takeaway_id: int, type: str) -> Result:
+    '''Update a takeaway's type. Result.data: (new) type'''
+    with db_session() as session:
+        takeaway = session.query(Takeaway).filter_by(id=takeaway_id).first()
+        if not takeaway:
+            return Result(False, None, f"Takeaway {takeaway_id} not found")
+        
+        takeaway_title = takeaway.title
+        takeaway.type = type
+    
+    return Result(True, type, f"Takeaway '{takeaway_title}' type updated")
+
+def update_takeaway_title(takeaway_id: int, title: str) -> Result:
+    '''Update a takeaway's title. Result.data: (new) title'''
+    if not title:
+        return Result(False, None, "Takeaway title is required")
+    
+    with db_session() as session:
+        takeaway = session.query(Takeaway).filter_by(id=takeaway_id).first()
+        if not takeaway:
+            return Result(False, None, f"Takeaway {takeaway_id} not found")
+        
+        takeaway.title = title
+    
+    return Result(True, title, f"Takeaway title updated")
+
+def update_takeaway_content(takeaway_id: int, content: str) -> Result:
+    '''Update a takeaway's content. Result.data: (new) content'''
+    if not content:
+        return Result(False, None, "Takeaway content is required")
+    
+    with db_session() as session:
+        takeaway = session.query(Takeaway).filter_by(id=takeaway_id).first()
+        if not takeaway:
+            return Result(False, None, f"Takeaway {takeaway_id} not found")
+        
+        takeaway_title = takeaway.title
+        takeaway.content = content
+    
+    return Result(True, content, f"Takeaway '{takeaway_title}' content updated")
+
+def update_takeaway_date(takeaway_id: int, date: date_type) -> Result:
+    '''Update a takeaway's date. Result.data: (new) date'''
+    with db_session() as session:
+        takeaway = session.query(Takeaway).filter_by(id=takeaway_id).first()
+        if not takeaway:
+            return Result(False, None, f"Takeaway {takeaway_id} not found")
+        
+        takeaway_title = takeaway.title
+        takeaway.date = date
+    
+    return Result(True, date, f"Takeaway '{takeaway_title}' date updated")
+
+
+# == General Functions ========================================================
+
+
+def set_item_property(item_id: int, item_type: str, field_name: str, value: Any) -> Result:
+    '''ONLY FOR DEBUGGING: Set a property of an item. Result.data: (new) value'''
+    raise ValueError("This function is only for debugging")
+    if item_type == "track":
+        item_properties_list = get_track_dict(item_id).data.keys()
+    elif item_type == "project":
+        item_properties_list = get_project_dict(item_id).data.keys()
+    elif item_type == "todo":
+        item_properties_list = get_todo_dict(item_id).data.keys()
+    else:
+        raise ValueError(f"Invalid item type: {item_type}")
+
+    if field_name not in item_properties_list:
+        return Result(False, None, f"Invalid field name: {field_name}")
+    elif field_name == "id":
+        return Result(False, None, "Id cannot be changed")
+
+    with db_session() as session:
+        if item_type == "track":
+            query = session.query(Track)
+        elif item_type == "project":
+            query = session.query(Project)
+        elif item_type == "todo":
+            query = session.query(TodoItem)
+        else:
+            return Result(False, None, f"Invalid item type: {item_type}")
+        
+        item = query.filter_by(id=item_id).first()
+        if not item:
+            return Result(False, None, f"Item {item_id} not found")
+        
+        item_name = getattr(item, "name")
+        setattr(item, field_name, value)
+    
+    return Result(True, value, f"Item '{item_name}': {field_name} set to '{value}'")

@@ -1,13 +1,8 @@
-from typing import TYPE_CHECKING
 import unicodedata
+from datetime import datetime
 
-from mukitodo import actions
-from mukitodo.tui.state import (
-    InputPurpose, StructureLevel, UIMode, View, TimerState
-)
-
-if TYPE_CHECKING:
-    from .state import AppState
+from mukitodo.tui.states.app_state import AppState, InputPurpose, StructureLevel, UIMode, View
+from mukitodo.tui.states.now_state import TimerStateEnum
 
 
 class Renderer:
@@ -22,33 +17,37 @@ class Renderer:
 
 
 
-    # == Render Content =================
+    # == Public Render Methods =================
 
-    def render_main_content(self) -> list:
-        """Render main content based on current view."""
-        if self.state.view == View.NOW:
-            return self._render_now_main_content()
-        
-        # STRUCTURE view
+    def render_now_view_content(self) -> list:
+        """Render NOW view content."""
+        return self._render_now_main_content()
+
+    def render_structure_view_content(self) -> list:
+        """Render STRUCTURE view content based on current level."""
         if self.state.structure_state.structure_level == StructureLevel.TRACKS:
             return self._render_tracks_main_content()
-        elif self.state.structure_state.structure_level == StructureLevel.TRACKS_WITH_PROJECTS:
+        elif self.state.structure_state.structure_level == StructureLevel.TRACKS_WITH_PROJECTS_T:
+            return self._render_tracks_with_projects_main_content()
+        elif self.state.structure_state.structure_level == StructureLevel.TRACKS_WITH_PROJECTS_P:
             return self._render_tracks_with_projects_main_content()
         else:  # TODOS
             return self._render_items_main_content()
 
+    def render_info_view_content(self) -> list:
+        """Render INFO view content."""
+        return self._render_info_view()
+
     def render_status_line(self) -> list:
         """Render status line based on current mode and state."""
         # Show confirmation prompt if in CONFIRM mode
-        if self.state.mode == UIMode.CONFIRM:
-            if self.state.pending_action == "delete":
-                message = "Press Backspace again to delete, any other key to cancel"
-            elif self.state.pending_action == "quit":
-                message = "Press q again to quit, any other key to cancel"
-            elif self.state.pending_action == "toggle_todo_structure":
-                message = "Press Space again to toggle, any other key to cancel"
-            elif self.state.pending_action == "toggle_todo_now":
-                message = "Press Enter again to mark toggle, any other key to cancel"
+        if self.state.ui_mode_state.mode == UIMode.CONFIRM:
+            confirm_action = self.state.ui_mode_state.confirm_action
+            if confirm_action:
+                # Build message based on action type
+                action_name = confirm_action.name
+                action_key = confirm_action.key
+                message = f"Press {action_key} again to confirm, any other key to cancel"
             else:
                 message = "Press same key to confirm, any other key to cancel"
             return [
@@ -56,17 +55,18 @@ class Renderer:
                 ("", " "),
                 ("class:warning", message)
             ]
-        
+
         # Show last result message if present
-        if self.state.last_result.message:
-            style = "class:success" if self.state.last_result.success else "class:error"
-            return [(style, f"  {self.state.last_result.message}")]
-        
-        if self.state.mode == UIMode.COMMAND:
+        last_result = self.state.message.last_result
+        if last_result and last_result.message:
+            style = "class:success" if last_result.success else "class:error"
+            return [(style, f"  {last_result.message}")]
+
+        if self.state.ui_mode_state.mode == UIMode.COMMAND:
             return [("class:dim", "  [Enter] execute  [Esc/Ctrl+G] exit command mode")]
-        
-        if self.state.mode == UIMode.INPUT:
-            action = "rename" if self.state.input_purpose == InputPurpose.RENAME else "add"
+
+        if self.state.ui_mode_state.mode == UIMode.INPUT:
+            action = "rename" if self.state.ui_mode_state.input_purpose == InputPurpose.STRUCTURE_RENAME_ITEM else "add"
             return [("class:dim", f"  [Enter] {action}  [Esc/Ctrl+G] cancel")]
         
         # Show controls in other situations
@@ -76,10 +76,10 @@ class Renderer:
             parts = []
             
             # Timer controls
-            if now_state.timer_state == TimerState.IDLE:
+            if now_state.timer_state == TimerStateEnum.IDLE:
                 parts.append("[Space] Start")
                 parts.append("[+/-] Adjust")
-            elif now_state.timer_state == TimerState.RUNNING:
+            elif now_state.timer_state == TimerStateEnum.RUNNING:
                 parts.append("[Space] Pause")
                 parts.append("[r] Reset")
             else:  # PAUSED
@@ -97,6 +97,10 @@ class Renderer:
             return [("class:dim", "  " + "  ".join(parts))]
         
 
+        if self.state.view == View.INFO:
+            parts = ["[↑↓] select field", "[r] edit", "[i/Esc] back", "[q] quit"]
+            return [("class:dim", "  " + "  ".join(parts))]
+        
         if self.state.view == View.STRUCTURE:
             structure_level = self.state.structure_state.structure_level
             parts = []
@@ -104,11 +108,11 @@ class Renderer:
             parts.extend(["[↑↓] move"])
 
             if structure_level == StructureLevel.TRACKS:
-                parts.extend(["[→] select"])
-            elif structure_level == StructureLevel.TRACKS_WITH_PROJECTS:
-                parts.extend(["[→] select", "[t] toggle"])
+                parts.extend(["[→] select", "[i] detail"])
+            elif structure_level in [StructureLevel.TRACKS_WITH_PROJECTS_T, StructureLevel.TRACKS_WITH_PROJECTS_P]:
+                parts.extend(["[→] select", "[i] detail"])
             elif structure_level == StructureLevel.TODOS:
-                parts.extend(["[←] back", "[Enter] add to NOW", "[Space] toggle"])
+                parts.extend(["[←] back", "[Enter] add to NOW", "[Space] toggle", "[i] detail"])
 
             parts.extend(["[=/+] add", "[Backspace] delete"])
             parts.extend(["[Tab] NOW", "[:] command", "[q] quit"])
@@ -116,22 +120,24 @@ class Renderer:
             return [("class:dim", "  " + "  ".join(parts))]
         
         # Default fallback
-        return [("class:dim", "  [Tab] Switch view  [q] Quit")]
+        return [("class:dim", "  [q] Quit")]
 
     def render_mode_indicator(self) -> list:
         """Render mode indicator based on current mode."""
-        if self.state.mode == UIMode.COMMAND:
+        if self.state.ui_mode_state.mode == UIMode.COMMAND:
             return [("class:mode", " COMMAND ")]
-        if self.state.mode == UIMode.INPUT:
-            if self.state.input_purpose == InputPurpose.RENAME:
+        if self.state.ui_mode_state.mode == UIMode.INPUT:
+            if self.state.ui_mode_state.input_purpose == InputPurpose.STRUCTURE_RENAME_ITEM:
                 return [("class:mode", " RENAME ")]
-            
+            elif self.state.ui_mode_state.input_purpose == InputPurpose.INFO_EDIT_FIELD:
+                return [("class:mode", " EDIT FIELD ")]
+
             # Add mode
             if self.state.view == View.NOW:
                 return [("class:mode", " NEW ITEM ")]
             elif self.state.structure_state.structure_level == StructureLevel.TRACKS:
                 return [("class:mode", " NEW TRACK ")]
-            elif self.state.structure_state.structure_level == StructureLevel.TRACKS_WITH_PROJECTS:
+            elif self.state.structure_state.structure_level in [StructureLevel.TRACKS_WITH_PROJECTS_T, StructureLevel.TRACKS_WITH_PROJECTS_P]:
                 return [("class:mode", " NEW PROJECT ")]
             else:
                 return [("class:mode", " NEW TODO ")]
@@ -189,92 +195,103 @@ class Renderer:
         return []
 
     def _render_tracks_main_content(self) -> list:
-        """Render TRACKS level view."""
+        """Render TRACKS level view. Read from structure_state cached data."""
         lines = []
-        tracks = actions.list_tracks()
-        
+        tracks = self.state.structure_state.current_tracks_list
+
         if not tracks:
             lines.append(("class:dim", "  No tracks. Press = to add\n"))
             return lines
-        
+
         lines.append(("class:header", "  Tracks\n\n"))
-        
+
         for idx, track in enumerate(tracks):
             is_selected = idx == self.state.structure_state.selected_track_idx
             prefix = "▸ " if is_selected else "  "
             style = "class:selected" if is_selected else ""
-            lines.append((style, f"{prefix}Track {idx + 1}: {track.name}\n"))
-        
+            lines.append((style, f"{prefix}Track {idx + 1}: {track['name']}\n"))
+
         return lines
 
     def _render_tracks_with_projects_main_content(self) -> list:
-        """Render TRACKS_WITH_PROJECTS level view."""
+        """Render TRACKS_WITH_PROJECTS level view. Read from structure_state cached data."""
         lines = []
-        tracks = actions.list_tracks()
-        
+        tracks_with_projects = self.state.structure_state.current_tracks_with_projects_list
+        tracks = self.state.structure_state.current_tracks_list
+
         if not tracks:
-            lines.append(("class:dim", "No tracks. Press : then 'add <name>'\n"))
+            lines.append(("class:dim", "No tracks. Press = to add\n"))
             return lines
-        
-        # Determine which tracks to show
-        if self.state.structure_state.show_all_tracks:
-            tracks_to_show = tracks
-        else:
-            # Show only the current track
-            if self.state.structure_state.current_track_id:
-                tracks_to_show = [t for t in tracks if t.id == self.state.structure_state.current_track_id]
-            else:
-                tracks_to_show = tracks
-        
-        tracks_with_projects = []
-        for track in tracks_to_show:
-            projects = actions.list_projects(track.id)
-            tracks_with_projects.append((track, projects))
-        
-        for track_idx_in_all, (track, projects) in enumerate(tracks_with_projects):
-            # Find the actual index in the full tracks list
-            actual_track_idx = next(i for i, t in enumerate(tracks) if t.id == track.id)
-            
-            is_track_selected = actual_track_idx == self.state.structure_state.selected_track_idx
-            
+
+        for track_idx, (track, projects) in enumerate(tracks_with_projects):
+            is_track_selected = track_idx == self.state.structure_state.selected_track_idx
+
             # Render single track box
             lines.extend(self._track_with_projects_block(
-                track, projects, actual_track_idx, is_track_selected
+                track, projects, track_idx, is_track_selected
             ))
-        
+
         return lines
 
     def _render_items_main_content(self) -> list:
-        """Render TODOS level view."""
+        """Render TODOS level view. Read from structure_state cached data."""
         lines = []
-        
-        # Get project name by querying actions
+        todos = self.state.structure_state.current_todos_list
+
+        # Get project name from current_projects_list
         project_name = "Unknown"
-        if self.state.structure_state.current_project_id and self.state.structure_state.current_track_id:
-            projects = actions.list_projects(self.state.structure_state.current_track_id)
-            for project in projects:
-                if project.id == self.state.structure_state.current_project_id:
-                    project_name = project.name
+        project_id = self.state.structure_state.current_project_id
+        if project_id:
+            # Find project in current_projects_list (already loaded in structure_state)
+            projects = self.state.structure_state.current_projects_list
+            for proj in projects:
+                if proj["id"] == project_id:
+                    project_name = proj["name"]
                     break
-        
+
         lines.append(("class:header", f"  Project: {project_name}\n\n"))
-        
-        if not self.state.structure_state.current_project_id:
+
+        if not project_id:
             lines.append(("class:dim", "  No project selected\n"))
             return lines
-        
-        todos = actions.list_todos(self.state.structure_state.current_project_id)
-        
+
         if not todos:
-            lines.append(("class:dim", "  No items. Press : to add items.\n"))
+            lines.append(("class:dim", "  No items. Press = to add items.\n"))
         else:
             for idx, todo in enumerate(todos):
                 is_selected = idx == self.state.structure_state.selected_todo_idx
-                marker = "✓" if todo.status == "completed" else "○"
+                marker = "✓" if todo["status"] == "done" else "○"
                 prefix = "▸ " if is_selected else "  "
-                is_done = todo.status == "completed"
+                is_done = todo["status"] == "done"
                 style = "class:selected" if is_selected else ("class:done" if is_done else "")
-                lines.append((style, f"{prefix}Item {idx + 1}: {marker} {todo.content}\n"))
+                lines.append((style, f"{prefix}Item {idx + 1}: {marker} {todo['name']}\n"))
+
+        return lines
+    
+    def _render_info_view(self) -> list:
+        """Render INFO view for current selected item."""
+        lines = []
+        
+        item_data = self.state.info_state.field_dict
+        if not item_data:
+            lines.append(("class:error", "  No field data available\n"))
+            return lines
+        
+        for idx, (field_name, value) in enumerate(item_data.items()):
+            if value is None:
+                display_value = "None"
+            elif isinstance(value, datetime):
+                display_value = value.strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                display_value = str(value)
+            
+            is_selected = idx == self.state.info_state.selected_field_idx
+            
+            prefix = "▸ " if is_selected else "  "
+            line_text = f"{prefix}{field_name}: {display_value}"
+            
+            style = "class:selected" if is_selected else ""
+            lines.append((style, line_text + "\n"))
         
         return lines
 
@@ -285,21 +302,24 @@ class Renderer:
     # Blocks for Now View (return content without borders)
 
     def _now_project_info_content(self) -> list[tuple[str, str]]:
-        """Return project info content (no borders)."""
+        """Return project info content (no borders). Read from now_state cached data."""
         now_state = self.state.now_state
-        
-        if now_state.current_todo_id and now_state.current_project_id:
-            project = actions.get_project(now_state.current_project_id)
-            todo = actions.get_todo(now_state.current_todo_id)
-            
-            if project and todo:
-                marker = "✓" if todo.status == "completed" else "○"
-                return [
-                    ("", f"{project.name}"),
-                    ("", f"{marker} {todo.content}")
-                ]
-        
-        # No todo selected
+
+        # Read from cached data in now_state
+        project = now_state.current_project_dict
+        todo = now_state.current_todo_dict
+
+        if project and todo:
+            marker = "✓" if todo["status"] == "done" else "○"
+            return [
+                ("", f"{project['name']}"),
+                ("", f"{marker} {todo['name']}")
+            ]
+        elif project:
+            # Only project selected, no specific todo
+            return [("", f"{project['name']}")]
+
+        # No item selected
         return [("class:dim", "--- No Todo Selected ---")]
 
     def _now_timer_content(self) -> tuple[str, str]:
@@ -312,9 +332,9 @@ class Renderer:
         time_str = f"{mins:02d}:{secs:02d}"
         
         # Apply style based on state
-        if now_state.timer_state == TimerState.RUNNING:
+        if now_state.timer_state == TimerStateEnum.RUNNING:
             style = "class:timer_running"
-        elif now_state.timer_state == TimerState.PAUSED:
+        elif now_state.timer_state == TimerStateEnum.PAUSED:
             style = "class:timer_paused"
         else:
             style = "class:timer_idle"
@@ -322,18 +342,19 @@ class Renderer:
         return (style, time_str)
 
     def _now_status_content(self) -> tuple[str, str]:
-        """Return status content with simple symbols (style, text)."""
+        """Return status content with simple symbols (style, text). Read from now_state cached data."""
         now_state = self.state.now_state
-        
-        if now_state.timer_state == TimerState.RUNNING:
+
+        if now_state.timer_state == TimerStateEnum.RUNNING:
             return ("class:dim", "▶ Running")
-        elif now_state.timer_state == TimerState.PAUSED:
+        elif now_state.timer_state == TimerStateEnum.PAUSED:
             return ("class:dim", "⏸  Paused")
-        elif now_state.current_todo_id:
-            todo = actions.get_todo(now_state.current_todo_id)
-            if todo and todo.status == "completed":
-                return ("class:dim", "✓ Finished")
-        
+
+        # Check todo status from cached data
+        todo = now_state.current_todo_dict
+        if todo and todo["status"] == "done":
+            return ("class:dim", "✓ Finished")
+
         return ("class:dim", "⏱")
 
 
@@ -351,7 +372,7 @@ class Renderer:
         track_style = "class:selected_track" if is_track_selected else "class:unselected_track"
         
         # Build top line with title
-        title = f" Track {track_idx + 1}: {track.name} "
+        title = f" Track {track_idx + 1}: {track['name']} "
         title_display_width = self._display_width(title)  # Fix for Chinese characters
         dash_count = max(1, self.box_width - 2 - 1 - title_display_width)
         top_line = "┌─" + title + "─" * dash_count + "┐\n"
@@ -359,7 +380,7 @@ class Renderer:
         
         if not projects:
             # Highlight "(no projects)" if focus is on projects
-            is_empty_focused = is_track_selected and self.state.structure_state.focus_on_projects
+            is_empty_focused = is_track_selected and self.state.structure_state.structure_level == StructureLevel.TRACKS_WITH_PROJECTS_P
             empty_prefix = "▸ " if is_empty_focused else "  "
             empty_display = f"{empty_prefix}(no projects)"
             empty_display_width = self._display_width(empty_display)
@@ -371,12 +392,12 @@ class Renderer:
         else:
             for proj_idx, project in enumerate(projects):
                 is_project_selected = (
-                    is_track_selected 
-                    and self.state.structure_state.focus_on_projects 
+                    is_track_selected
+                    and self.state.structure_state.structure_level == StructureLevel.TRACKS_WITH_PROJECTS_P
                     and proj_idx == self.state.structure_state.selected_project_idx
                 )
                 proj_prefix = "▸ " if is_project_selected else "  "
-                proj_text = f"{proj_prefix}Project {proj_idx + 1}: {project.name}"
+                proj_text = f"{proj_prefix}Project {proj_idx + 1}: {project['name']}"
                 proj_text_width = self._display_width(proj_text)  # Fix for Chinese characters
                 padding = max(0, self.box_width - 2 - proj_text_width)
                 proj_style = "class:selected" if is_project_selected else track_style

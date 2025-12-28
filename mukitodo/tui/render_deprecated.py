@@ -25,9 +25,9 @@ def _render_now(state: "AppState") -> list:
     # 1. Todo information section
     if now_state.current_todo_id:
         # Display Track / Project / Todo
-        track = actions.get_track(now_state.current_track_id)
-        project = actions.get_project(now_state.current_project_id)
-        todo = actions.get_todo(now_state.current_todo_id)
+        track = actions.get_track_dict(now_state.current_track_id)
+        project = actions.get_project_dict(now_state.current_project_id)
+        todo = actions.get_todo_dict(now_state.current_todo_id)
         
         if track and project and todo:
             lines.append(("class:dim", f"  Track: {track.name}\n"))
@@ -87,7 +87,7 @@ def render_main_content(state: "AppState") -> list:
 
 def _render_tracks(state: "AppState") -> list:
     lines = []
-    tracks = actions.list_tracks()
+    tracks = actions.list_tracks_id()
     
     if not tracks:
         lines.append(("class:dim", "  No tracks. Press = to add\n"))
@@ -106,7 +106,7 @@ def _render_tracks(state: "AppState") -> list:
 
 def _render_tracks_with_projects(state: "AppState") -> list:
     lines = []
-    tracks = actions.list_tracks()
+    tracks = actions.list_tracks_id()
     
     if not tracks:
         lines.append(("class:dim", "No tracks. Press : then 'add <name>'\n"))
@@ -124,7 +124,7 @@ def _render_tracks_with_projects(state: "AppState") -> list:
     
     tracks_with_projects = []
     for track in tracks_to_show:
-        projects = actions.list_projects(track.id)
+        projects = actions.list_projects_id(track.id)
         tracks_with_projects.append((track, projects))
     
     for track_idx_in_all, (track, projects) in enumerate(tracks_with_projects):
@@ -179,7 +179,7 @@ def _render_items(state: "AppState") -> list:
     # Get project name by querying actions
     project_name = "Unknown"
     if state.structure_state.current_project_id and state.structure_state.current_track_id:
-        projects = actions.list_projects(state.structure_state.current_track_id)
+        projects = actions.list_projects_id(state.structure_state.current_track_id)
         for project in projects:
             if project.id == state.structure_state.current_project_id:
                 project_name = project.name
