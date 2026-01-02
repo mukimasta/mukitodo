@@ -46,22 +46,42 @@ def run():
 
     # == Normal Mode Key Bindings ==
 
-    @kb.add("q", filter=is_normal_mode)
+    @kb.add("q", filter=is_normal_mode & (is_now_view | is_structure_view))
     def _(event):
         state.ask_confirm(ConfirmAction.QUIT)
 
-    @kb.add("tab", filter=is_normal_mode)
+    @kb.add("q", filter=is_normal_mode & (is_timeline_view | is_box_view | is_archive_view | is_info_view))
     def _(event):
-        state.switch_view()
+        state.exit_current_view()
 
-    @kb.add("b", filter=is_normal_mode)
+    @kb.add("tab", filter=is_normal_mode & ~is_info_view)
     def _(event):
-        state.toggle_box_view()
+        if state.view in (View.NOW, View.STRUCTURE):
+            state.switch_view()
+        else:
+            state.return_to_last_primary_view()
 
-    @kb.add("A", filter=is_normal_mode)
+    @kb.add("[", filter=is_normal_mode & ~is_info_view)
     def _(event):
-        """Enter Archive View from any view."""
-        state.enter_archive_view()
+        state.toggle_box_view(BoxSubview.TODOS)
+
+    @kb.add("]", filter=is_normal_mode & ~is_info_view)
+    def _(event):
+        state.toggle_box_view(BoxSubview.IDEAS)
+
+    @kb.add("`", filter=is_normal_mode & ~is_info_view)
+    def _(event):
+        if state.view == View.ARCHIVE:
+            state.exit_archive_view()
+        else:
+            state.enter_archive_view()
+
+    @kb.add("'", filter=is_normal_mode & ~is_info_view)
+    def _(event):
+        if state.view == View.TIMELINE:
+            state.exit_timeline_view()
+        else:
+            state.enter_timeline_view()
 
 
     # @kb.add(":", filter=is_normal_mode)
@@ -189,14 +209,6 @@ def run():
     def _(event):
         state.box_state.move_cursor(1)
 
-    @kb.add("[", filter=is_normal_mode & is_box_view)
-    def _(event):
-        state.box_state.set_subview(BoxSubview.TODOS)
-
-    @kb.add("]", filter=is_normal_mode & is_box_view)
-    def _(event):
-        state.box_state.set_subview(BoxSubview.IDEAS)
-
     @kb.add("i", filter=is_normal_mode & is_box_view)
     def _(event):
         state.open_item_info()
@@ -226,11 +238,14 @@ def run():
 
     @kb.add("m", filter=is_normal_mode & is_box_view)
     def _(event):
-        state.start_pending_move_from_box()
+        if state.box_state.subview == BoxSubview.TODOS:
+            state.start_pending_move_from_box()
+        else:
+            state.start_pending_promote_from_box()
 
-    @kb.add("p", filter=is_normal_mode & is_box_view)
+    @kb.add("escape", filter=is_normal_mode & is_box_view)
     def _(event):
-        state.start_pending_promote_from_box()
+        state.exit_box_view()
 
     # INFO view specific key bindings
     
@@ -257,7 +272,7 @@ def run():
     def _(event):
         state.archive_state.move_cursor(1)
 
-    @kb.add("u", filter=is_normal_mode & is_archive_view)
+    @kb.add("a", filter=is_normal_mode & is_archive_view)
     def _(event):
         """Unarchive selected item."""
         state.ask_confirm(ConfirmAction.UNARCHIVE_ITEM)
@@ -273,19 +288,13 @@ def run():
         state.open_item_info()
 
     @kb.add("escape", filter=is_normal_mode & is_archive_view)
-    @kb.add("A", filter=is_normal_mode & is_archive_view)
+    @kb.add("`", filter=is_normal_mode & is_archive_view)
     def _(event):
         """Exit Archive View (return to STRUCTURE)."""
         state.exit_archive_view()
 
     # TIMELINE view key bindings
 
-    @kb.add("t", filter=is_normal_mode & (is_now_view | is_structure_view))
-    def _(event):
-        """Enter Timeline View from NOW or STRUCTURE view."""
-        state.enter_timeline_view()
-
-    @kb.add("t", filter=is_normal_mode & is_timeline_view)
     @kb.add("escape", filter=is_normal_mode & is_timeline_view)
     def _(event):
         """Exit Timeline View."""

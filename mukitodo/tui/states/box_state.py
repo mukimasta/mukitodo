@@ -82,6 +82,22 @@ class BoxState:
         self._subview = subview
         self._message.set(EmptyResult)
 
+    def focus_item_by_id(self, *, item_type: str, item_id: int) -> None:
+        """Focus a box todo/idea by id."""
+        self.load_box_lists()
+        if item_type == "todo":
+            self._subview = BoxSubview.TODOS
+            for idx, t in enumerate(self._current_box_todos_list):
+                if int(t.get("id")) == int(item_id):
+                    self._selected_todo_idx = idx
+                    return
+        if item_type == "idea":
+            self._subview = BoxSubview.IDEAS
+            for idx, it in enumerate(self._current_box_ideas_list):
+                if int(it.get("id")) == int(item_id):
+                    self._selected_idea_idx = idx
+                    return
+
     # === Actions ===========================================================
 
     def delete_selected_item(self) -> Result:

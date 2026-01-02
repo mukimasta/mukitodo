@@ -41,7 +41,7 @@ class ConfirmAction(Enum):
     ARCHIVE_BOX_ITEM = ("archive_box_item", "a")
     DELETE_BOX_ITEM = ("delete_box_item", "backspace")
     CONFIRM_BOX_TRANSFER = ("confirm_box_transfer", "enter")
-    UNARCHIVE_ITEM = ("unarchive_item", "u")
+    UNARCHIVE_ITEM = ("unarchive_item", "a")
     DELETE_ARCHIVE_ITEM = ("delete_archive_item", "backspace")
     DELETE_TIMELINE_ITEM = ("delete_timeline_item", "backspace")
 
@@ -74,7 +74,10 @@ class AppState:
         
         # === View state ===
         self._view: View = View.NOW
-        self._from_view: View | None = None # Track which view we came from when entering INFO view
+        self._last_primary_view: View = View.NOW
+        self._info_from_view: View | None = None
+        self._timeline_from_view: View | None = None
+        self._archive_from_view: View | None = None
         self._box_from_view: View | None = None  # Remember where we came from when entering BOX
 
         self._now_state = NowState(self._message)
@@ -96,23 +99,61 @@ class AppState:
 
     # == View State Management ==================================================
 
+    def _set_view(self, view: View) -> None:
+        self._view = view
+        if view in (View.NOW, View.STRUCTURE):
+            self._last_primary_view = view
+
     def switch_view(self) -> None:
         """Switch between NOW and STRUCTURE views."""
         if self._view == View.NOW:
-            self._view = View.STRUCTURE
+            self._set_view(View.STRUCTURE)
         elif self._view == View.STRUCTURE:
-            self._view = View.NOW
+            self._set_view(View.NOW)
 
-    # == Box View ==
+    def return_to_last_primary_view(self) -> None:
+        """Return to the last primary view (NOW/STRUCTURE)."""
+        if self._view == View.TIMELINE:
+            self._timeline_from_view = None
+        elif self._view == View.BOX:
+            self._box_from_view = None
+        elif self._view == View.ARCHIVE:
+            self._archive_from_view = None
 
-    def toggle_box_view(self) -> None:
-        """Enter or exit BOX view."""
+        self._set_view(self._last_primary_view)
+        if self._view == View.STRUCTURE:
+            self._structure_state.load_current_lists()
+        self._message.set(EmptyResult)
+
+    def exit_current_view(self) -> None:
+        """Exit current view (for Esc/q behavior in non-primary views)."""
+        if self._view == View.INFO:
+            self.return_from_info()
+            return
+        if self._view == View.TIMELINE:
+            self.exit_timeline_view()
+            return
         if self._view == View.BOX:
             self.exit_box_view()
             return
-        self.enter_box_view()
+        if self._view == View.ARCHIVE:
+            self.exit_archive_view()
+            return
 
-    def enter_box_view(self) -> None:
+    # == Box View ==
+
+    def toggle_box_view(self, subview: BoxSubview | None = None) -> None:
+        """Enter or exit BOX view (optionally select subview)."""
+        if self._view == View.BOX:
+            if subview is not None and self._box_state.subview != subview:
+                self._box_state.set_subview(subview)
+                self._message.set(EmptyResult)
+                return
+            self.exit_box_view()
+            return
+        self.enter_box_view(subview=subview)
+
+    def enter_box_view(self, *, subview: BoxSubview | None = None) -> None:
         """Enter BOX view from any non-INFO view."""
         if self._view == View.INFO:
             # Keep INFO read-only and isolated.
@@ -120,9 +161,8 @@ class AppState:
             return
 
         self._box_from_view = self._view
-        self._view = View.BOX
-        # UX: entering BOX always starts at TODOS.
-        self._box_state.set_subview(BoxSubview.TODOS)
+        self._set_view(View.BOX)
+        self._box_state.set_subview(subview or BoxSubview.TODOS)
         self._box_state.load_box_lists()
         self._message.set(EmptyResult)
 
@@ -130,7 +170,7 @@ class AppState:
         """Exit BOX view and return to the previous view (NOW/STRUCTURE)."""
         target = self._box_from_view or View.STRUCTURE
         self._box_from_view = None
-        self._view = target
+        self._set_view(target)
         if self._view == View.STRUCTURE:
             self._structure_state.load_current_lists()
         self._message.set(EmptyResult)
@@ -159,7 +199,7 @@ class AppState:
             "item_id": item_id,
             "return_box_subview": BoxSubview.TODOS,
         }
-        self._view = View.STRUCTURE
+        self._set_view(View.STRUCTURE)
         self._structure_state.reset_to_default_view()
         self._message.set(Result(True, None, "Move: select a project (→) or enter Todos level (→), then press Enter to confirm"))
 
@@ -188,7 +228,7 @@ class AppState:
             "item_id": item_id,
             "return_box_subview": BoxSubview.IDEAS,
         }
-        self._view = View.STRUCTURE
+        self._set_view(View.STRUCTURE)
         self._structure_state.reset_to_default_view()
         self._message.set(Result(True, None, "Promote: select a track, then press Enter to confirm"))
 
@@ -201,7 +241,7 @@ class AppState:
         if self._structure_state.structure_level == StructureLevel.TODOS:
             self._structure_state.go_back()
         self._pending_transfer = None
-        self._view = View.BOX
+        self._set_view(View.BOX)
         self._box_state.set_subview(return_subview)
         self._box_state.load_box_lists()
         self._message.set(EmptyResult)
@@ -236,7 +276,7 @@ class AppState:
             self._pending_transfer = None
             # Exit special no-cursor TODOS confirm state (go back once).
             self._structure_state.go_back()
-            self._view = View.BOX
+            self._set_view(View.BOX)
             self._box_state.set_subview(BoxSubview.TODOS)
             self._box_state.load_box_lists()
             return
@@ -252,7 +292,7 @@ class AppState:
                 return
 
             self._pending_transfer = None
-            self._view = View.BOX
+            self._set_view(View.BOX)
             self._box_state.set_subview(BoxSubview.IDEAS)
             self._box_state.load_box_lists()
             return
@@ -300,7 +340,7 @@ class AppState:
             raise ValueError("Already in INFO view")
 
         # Save current view for returning
-        self._from_view = self._view
+        self._info_from_view = self._view
 
         # Get current item context based on view
         if self._view == View.NOW:
@@ -314,7 +354,7 @@ class AppState:
             if item_type == "none" or item_id is None:
                 self._message.set(Result(False, None, "No item selected"))
                 return
-            self._view = View.INFO
+            self._set_view(View.INFO)
             self._info_state.reload_info_panel_for_box(item_type, item_id)
             return
         elif self._view == View.TIMELINE:
@@ -326,7 +366,7 @@ class AppState:
             item_type, item_id = item_info
             # For session/takeaway, we pass the item_id as the relevant ID
             # Info view needs to handle session and takeaway types
-            self._view = View.INFO
+            self._set_view(View.INFO)
             self._info_state.reload_info_panel_for_timeline(item_type, item_id)
             return
         else:
@@ -344,16 +384,16 @@ class AppState:
             self._message.set(Result(False, None, "No todo selected"))
             return
 
-        self._view = View.INFO
+        self._set_view(View.INFO)
         self._info_state.reload_info_panel(item_type, track_id, project_id, todo_id)
 
     def return_from_info(self) -> None:
         """Return from INFO view to previous view."""
-        if self._from_view is None:
+        if self._info_from_view is None:
             return
 
-        self._view = self._from_view
-        self._from_view = None
+        self._set_view(self._info_from_view)
+        self._info_from_view = None
         self._info_state.leave_info_panel()
         if self._view == View.STRUCTURE:
             self._structure_state.load_current_lists()
@@ -361,18 +401,31 @@ class AppState:
             self._archive_state.load_archive_data()
         elif self._view == View.TIMELINE:
             self._timeline_state.load_timeline_data()
+        elif self._view == View.BOX:
+            self._box_state.load_box_lists()
 
     # == Archive View ==
 
     def enter_archive_view(self) -> None:
         """Enter ARCHIVE view from any view."""
-        self._view = View.ARCHIVE
+        if self._view == View.INFO:
+            self._message.set(Result(False, None, "Cannot enter ARCHIVE from INFO view"))
+            return
+        self._archive_from_view = self._view
+        self._set_view(View.ARCHIVE)
         self._archive_state.load_archive_data()
 
     def exit_archive_view(self) -> None:
-        """Exit ARCHIVE view and return to STRUCTURE view."""
-        self._view = View.STRUCTURE
-        self._structure_state.load_current_lists()
+        """Exit ARCHIVE view and return to previous view."""
+        target = self._archive_from_view or View.STRUCTURE
+        self._archive_from_view = None
+        self._set_view(target)
+        if self._view == View.STRUCTURE:
+            self._structure_state.load_current_lists()
+        elif self._view == View.BOX:
+            self._box_state.load_box_lists()
+        elif self._view == View.TIMELINE:
+            self._timeline_state.load_timeline_data()
 
     def unarchive_item_and_maybe_jump(self) -> None:
         """
@@ -387,27 +440,32 @@ class AppState:
 
         last_result = self._message.last_result
         if last_result.success and self._archive_state.last_unarchived_was_box_todo:
-            self._view = View.BOX
+            self._set_view(View.BOX)
             self._box_state.set_subview(BoxSubview.TODOS)
             self._box_state.load_box_lists()
 
     # == Timeline View ==
 
     def enter_timeline_view(self) -> None:
-        """Enter TIMELINE view from NOW or STRUCTURE view."""
-        self._from_view = self._view
-        self._view = View.TIMELINE
+        """Enter TIMELINE view from any non-INFO view."""
+        if self._view == View.INFO:
+            self._message.set(Result(False, None, "Cannot enter TIMELINE from INFO view"))
+            return
+        self._timeline_from_view = self._view
+        self._set_view(View.TIMELINE)
         self._timeline_state.load_timeline_data()
 
     def exit_timeline_view(self) -> None:
         """Exit TIMELINE view and return to previous view."""
-        if self._from_view is not None:
-            self._view = self._from_view
-            self._from_view = None
+        if self._timeline_from_view is not None:
+            self._set_view(self._timeline_from_view)
+            self._timeline_from_view = None
         else:
-            self._view = View.STRUCTURE
+            self._set_view(View.STRUCTURE)
         if self._view == View.STRUCTURE:
             self._structure_state.load_current_lists()
+        elif self._view == View.BOX:
+            self._box_state.load_box_lists()
 
     # == Now View ==
 
@@ -422,7 +480,7 @@ class AppState:
         assert project_id is not None
 
         self._now_state.set_item(track_id, project_id, todo_id)
-        self._view = View.NOW
+        self._set_view(View.NOW)
         self._message.set(Result(True, None, f"Entered NOW with {item_type}"))
 
     def finish_session(self) -> None:
@@ -599,6 +657,13 @@ class AppState:
 
     def confirm_input(self) -> None:
         """Confirm (submit) current INPUT form and execute corresponding actions."""
+        view = self._view
+        input_purpose = self._input_state.input_purpose
+        form_type = self._input_state.form_type
+        created_id = None
+        context_track_id = self._input_state.context_track_id
+        context_project_id = self._input_state.context_project_id
+
         # Empty submit behavior (v1): if user didn't enter anything meaningful, treat as cancel (no warning).
         if self._input_state.input_purpose == InputPurpose.ADD:
             title = self._input_state.get_field_str(FormField.TITLE).strip()
@@ -625,6 +690,8 @@ class AppState:
 
         if not result.success:
             return
+        if isinstance(result.data, int):
+            created_id = result.data
 
         # Special: Keep INPUT mode for continuous NOW takeaways.
         if self._view == View.NOW and self._input_state.form_type == FormType.TAKEAWAY and self._input_state.context_now_session_id is not None:
@@ -645,6 +712,23 @@ class AppState:
         elif self._view == View.BOX:
             self._box_state.load_box_lists()
 
+        if input_purpose == InputPurpose.ADD and created_id is not None:
+            if view == View.STRUCTURE and form_type is not None:
+                if form_type == FormType.TRACK:
+                    self._structure_state.focus_track_by_id(created_id)
+                elif form_type == FormType.PROJECT:
+                    if context_track_id is not None:
+                        self._structure_state.focus_track_by_id(context_track_id)
+                    self._structure_state.focus_project_by_id(created_id, enter_project_level=True)
+                elif form_type == FormType.STRUCTURE_TODO:
+                    if context_project_id is not None:
+                        self._structure_state.focus_todo_by_id(created_id)
+            elif view == View.BOX and form_type is not None:
+                if form_type == FormType.BOX_TODO:
+                    self._box_state.focus_item_by_id(item_type="todo", item_id=created_id)
+                elif form_type == FormType.BOX_IDEA:
+                    self._box_state.focus_item_by_id(item_type="idea", item_id=created_id)
+
 
 
 
@@ -662,7 +746,7 @@ class AppState:
 
     @property
     def from_view(self) -> View | None:
-        return self._from_view
+        return self._info_from_view
 
     @property
     def now_state(self) -> NowState:

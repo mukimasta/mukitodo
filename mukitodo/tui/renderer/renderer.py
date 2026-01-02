@@ -194,19 +194,19 @@ class Renderer:
                 parts.append("[Space] Resume")
                 parts.append("[r] Reset")
             
-            # Todo complete
-            if now_state.current_todo_id is not None:
-                parts.append("[Enter] Mark done")
+            parts.append("[Enter] Finish")
             
             # Navigation
             parts.append("[Tab] STRUCTURE")
+            parts.append("[' ] Timeline")
+            parts.append("[i] Info")
             parts.append("[q] Quit")
             
             return [("class:dim", "  " + "  ".join(parts))]
         
 
         if self.state.view == View.INFO:
-            parts = ["[↑↓] select field", "[i/Esc] back", "[q] quit"]
+            parts = ["[↑↓] move", "[i/Esc/q] back"]
             return [("class:dim", "  " + "  ".join(parts))]
         
         if self.state.view == View.STRUCTURE:
@@ -223,36 +223,35 @@ class Renderer:
                 parts.extend(["[←] back", "[Enter] add to NOW", "[Space] toggle", "[i] detail"])
 
             parts.extend(["[=/+] add", "[Backspace] delete"])
-            parts.extend(["[Tab] NOW", "[:] command", "[q] quit"])
+            parts.extend(["[Tab] NOW", "[' ] timeline", "[i] info", "[q] quit"])
 
             return [("class:dim", "  " + "  ".join(parts))]
 
         if self.state.view == View.ARCHIVE:
-            parts = ["[↑↓] move", "[u] unarchive", "[Backspace] delete", "[i] detail", "[Esc/A] exit", "[q] quit"]
+            parts = ["[↑↓] move", "[a] unarchive", "[Backspace] delete", "[i] detail", "[`/Esc/q] exit"]
             return [("class:dim", "  " + "  ".join(parts))]
 
         if self.state.view == View.BOX:
             parts = [
                 "[↑↓] move",
-                "[[]/[]] switch",
+                "[[]] todos",
+                "[]] ideas",
                 "[=/+] add",
                 "[r] edit",
                 "[a] archive",
                 "[Backspace] delete",
-                "[m] move",
-                "[p] promote",
+                "[m] move/promote",
                 "[i] detail",
-                "[b] back",
-                "[q] quit",
+                "[Esc/q] back",
             ]
             return [("class:dim", "  " + "  ".join(parts))]
 
         if self.state.view == View.TIMELINE:
-            parts = ["[↑↓] move", "[i] detail", "[=/+] new takeaway", "[r] edit", "[Backspace] delete", "[t/Esc] exit", "[q] quit"]
+            parts = ["[↑↓] move", "[i] detail", "[=/+] new takeaway", "[r] edit", "[Backspace] delete", "['/Esc/q] exit"]
             return [("class:dim", "  " + "  ".join(parts))]
 
         # Default fallback
-        return [("class:dim", "  [q] Quit")]
+        return [("class:dim", "  [q] Quit/Back")]
 
     def render_mode_indicator(self) -> list:
         """Render mode indicator based on current mode."""
@@ -288,8 +287,7 @@ class Renderer:
 
         verb = "New" if purpose == InputPurpose.ADD else "Edit"
         label = form_type.value.replace("_", " ").title()
-        # Render as a solid mode block (no brackets).
-        return [("class:mode", f" {verb} {label} ")]
+        return [("class:mode", f"[{verb} {label}]")]
 
     def render_input_field_label(self, label: str) -> list[tuple[str, str]]:
         return [("class:dim", label)]
@@ -302,23 +300,48 @@ class Renderer:
         return [(style, value)]
 
     def render_input_chip(self, field: FormField, label: str) -> list[tuple[str, str]]:
-        """Compact '[Label:value]' chip, highlighted when selected."""
+        """Compact chip, highlighted when selected."""
         input_state = self.state.input_state
         value = input_state.get_field_display(field)
         style = "class:selected" if input_state.current_field == field else "class:dim"
-        return [(style, f"[{label}:{value}]")]
+
+        if field == FormField.STATUS:
+            s = str(value or "active")
+            display = s.replace("_", " ").title()
+            return [(style, f"[{display}]")]
+
+        if field in (FormField.WILLINGNESS_HINT, FormField.IMPORTANCE_HINT, FormField.URGENCY_HINT):
+            icon = {
+                FormField.WILLINGNESS_HINT: "♥",
+                FormField.IMPORTANCE_HINT: "⭑",
+                FormField.URGENCY_HINT: "⚡",
+            }[field]
+            bar = str(value or "▁")
+            return [(style, f"[{icon} {bar}]")]
+
+        if field == FormField.MATURITY_HINT:
+            bar = str(value or "▁")
+            return [(style, f"[M {bar}]")]
+
+        if field == FormField.TYPE:
+            t = str(value or "action").replace("_", " ").title()
+            return [(style, f"[{t}]")]
+
+        if label:
+            return [(style, f"[{label}:{value}]")]
+        return [(style, f"[{value}]")]
 
     # == Structure Line Formatting ======================================
 
     _STATUS_ICON_MAP = {
-        "focusing": "📌",
+        "focusing": "⎈",
         "active": "○",
         "sleeping": "z",
         "finished": "◉",
         "done": "◉",
         "cancelled": "×",
         "deprecated": "×",
-        "promoted": "◉",
+        "promoted": "⇡",
     }
 
     def _get_terminal_width(self, fallback: int = 80) -> int:

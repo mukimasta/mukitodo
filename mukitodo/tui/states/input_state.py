@@ -201,8 +201,19 @@ class InputState:
         if field == FormField.STATUS:
             return str(self._field_dict.get(field) or "active")
         if field in (FormField.MATURITY_HINT, FormField.WILLINGNESS_HINT, FormField.IMPORTANCE_HINT, FormField.URGENCY_HINT):
+            # Display as bar blocks (README): ▁ ▂ ▅ █  (0..3)
             v = self._field_dict.get(field)
-            return str(v) if v is not None else "-"
+            try:
+                n = int(v) if v is not None else 0
+            except Exception:
+                n = 0
+            n = max(0, min(3, n))
+            return {
+                0: "▁",
+                1: "▂",
+                2: "▅",
+                3: "█",
+            }[n]
         if field == FormField.TYPE:
             return str(self._field_dict.get(field) or "action")
         if field in (FormField.DEADLINE, FormField.DATE, FormField.START_AT):
@@ -263,6 +274,10 @@ class InputState:
     @property
     def context_now_session_id(self) -> int | None:
         return self._context_now_session_id
+
+    @property
+    def context_track_id(self) -> int | None:
+        return self._context_track_id
 
     @property
     def context_project_id(self) -> int | None:

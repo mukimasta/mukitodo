@@ -251,7 +251,7 @@ def box_content(*, state, h: RenderHelpers) -> ViewContent:
 
     lines.append(h.text_line("  BOX", "class:header"))
     lines.append(h.blank_line())
-    lines.append(h.text_line(f"  Subview: {subview.value.upper()}   ([ / ] switch)", "class:dim"))
+    lines.append(h.text_line(f"  Subview: {subview.value.upper()}   ([ / ] todos/ideas, Esc/q exit)", "class:dim"))
     lines.append(h.blank_line())
 
     width = max(constants.LIST_MIN_TERMINAL_WIDTH, h.get_terminal_width() - 2)

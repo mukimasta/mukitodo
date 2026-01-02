@@ -12,7 +12,7 @@ Design:
 # =============================================================================
 
 # For line-based lists: keep this many lines as a safety margin around the cursor.
-VIEWPORT_CURSOR_MARGIN_LINES = 2
+VIEWPORT_CURSOR_MARGIN_LINES = 1
 
 
 # =============================================================================
@@ -20,13 +20,13 @@ VIEWPORT_CURSOR_MARGIN_LINES = 2
 # =============================================================================
 
 # TrackWithProjects (Structure) box width in characters.
-STRUCTURE_TWP_BOX_WIDTH = 45
+STRUCTURE_TWP_BOX_WIDTH = 60
 
 # Generic separator line display width (used where a fixed-length separator is rendered).
 SEPARATOR_LINE_WIDTH = 70
 
 # NOW view box width (ASCII box).
-NOW_VIEW_BOX_WIDTH = 60
+NOW_VIEW_BOX_WIDTH = 50
 
 
 # =============================================================================
@@ -50,13 +50,13 @@ TIMELINE_TAKEAWAY_PREVIEW_CHARS = 30
 # NOW View layout
 NOW_BOX_WIDTH = NOW_VIEW_BOX_WIDTH
 NOW_PADDING_LEFT_RIGHT_WEIGHT = 6
-NOW_PADDING_TOP_WEIGHT = 45
+NOW_PADDING_TOP_WEIGHT = 50
 NOW_PADDING_BOTTOM_WEIGHT = 55
 
 # Input Mode form panel widths (fixed)
 INPUT_PURPOSE_WIDTH = 16
-INPUT_TITLE_WIDTH = 28
-INPUT_DATE_WIDTH = 10
+INPUT_TITLE_WIDTH = 15
+INPUT_DATE_WIDTH = 15
 INPUT_CONTENT_WIDTH = 52
 
 

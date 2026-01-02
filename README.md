@@ -90,24 +90,28 @@ Timeline 语义：我想要回顾我过去做了什么，以及我从中收获�
 
 ## TUI 界面与交互设计
 
-典型路径：
-1. 进入 Structure 结构视图
-2. 选择 Track, Project (, Todo)
-3. 添加至 NOW 行动器
-4. 开始行动
-5. 结束行动并记录 Takeaways
+视图层级：
+- 一级视图：NOW, STRUCTURE
+- 二级视图：Timeline, Box, Archive
+- Info 窗口视图：Info
 
 
+### 视图切换按键
+
+- Switch View between NOW and STRUCTURE: `Tab`
+- Enter/Exit Timeline View: `'`
+- Enter/Exit Box View: `[` (Box Todos) / `]` (Box Ideas)
+- Enter/Exit Archive View: `` ` ``
+- Enter/Exit Info View: `i`
+- Exit Current View General (Timeline/Box/Archive/Info): `Esc` / `q`
+
+1. 一级视图（NOW, STRUCTURE）按 `Tab` 互相切换
+2. 在一级、二级视图（除 Info 窗口视图外的其他视图）按对应快捷键进入其他二级视图（Timeline, Box, Archive）
+3. 在任意视图（NOW, STRUCTURE, Timeline, Box, Archive）选择当前项目后，按 `i` 进入 Info 窗口视图，此时不可以按一、二级视图的快捷键进入其他视图，只能按 `Esc` 、 `q` 或 `i` 退出 Info 窗口视图后，返回上一视图后再操作
+3. 在一级视图（NOW, STRUCTURE）按 `q` 为退出程序操作（需要二次确认）。其余视图按 `Esc` 、 `q` 或 视图对应快捷键退出当前视图（无需二次确认）
+4. 在二级视图（Timeline, Box, Archive）按 `Tab` 键，回到上一个一级视图（NOW, STRUCTURE）
 
 
-### 全局按键
-
-- Switch View: `Tab` (Between NOW and STRUCTURE)
-- Timeline View: `t`
-- Box View: `b`
-- Archive View: `A`
-- Info View: `i`
-- Quit: `q`
 
 
 ### 1. Now 行动器
@@ -123,34 +127,31 @@ Timeline 语义：我想要回顾我过去做了什么，以及我从中收获�
 └────────────────────────────────────────────────┘
 ```
 
-Item Info:
+**Item Info:**
 - Default: `--- No Todo Selected ---`
-- Selected: `track > project[ > todo]`
+- Selected: `project[ > todo]`
 
 
 - Start / Pause / Resume: `Space`
 - Reset: `r`
-- Adjust: `+ / = / -`
+- Adjust: `+/=, -`
 - View Info: `i`
-- Timeline View: `t`
-- Add Done Item: `d`
+- Timeline View: `'`
+- Add Done Item: `d` # TODO: Implement Add Done Item
 - Finish Session: `Enter`
 
 When Session is finished:
 1. Ask for Saving Confirmation
-2. Ask for Done List if no item is selected
+2. Ask for Done List if no item is selected # TODO: Implement Done List
 3. Save Session
 4. Ask for Takeaways
 5. Save Takeaways
 6. Return to NOW view
 
 
-### 2. Timeline View
+### 2. Timeline View (View Shortcut: `'`)
 
-- Enter Timeline View: `t`
-- Leave Timeline View: `Esc` / `t`
 - Move Cursor: `Up/Down Arrow`
-- View Info: `i`
 - Add Takeaway: `+ / =`
 - Edit Takeaway: `r`
 - Delete: `Backspace`
@@ -181,26 +182,28 @@ General:
 - Back: `Left Arrow`
 - View Info: `i`
 - Add: `+ / =`
-- Rename: `r`
-- Delete: `Backspace`
+- Edit: `r`
+- Delete: `Backspace` (Need confirm)
 - Done / Undo: `Space` (Done/Finish/Complete)
-- Enter NOW with item: `Enter`
-- Archive Item: `a`
+- Enter NOW with item: `Enter` (Need confirm)
+- Archive Item: `a` (Need confirm)
 - Sleep Item: `s`
 - Cancel Item: `c` (For Project/Todo/Idea(Deprecate))
-- Record Takeaways: `t`
-- Pin Item: `p` (For Project/Todo)
+- Record Takeaways: `t` # TODO: Implement Record Takeaways
+- Pin Item: `p` (For Project/Todo) # TODO: Implement Pin Todo
 
-Display Format:
+
+**Display Format:**
 
 `<status> <Type + index + name> <flags> <right-aligned: hints, ddl>`
 
 - status: (according to the status of the item)
-    - focusing: `📌` (bold line)
+    - focusing: `⎈` (bold line) (✡✪)
     - active：`○`
     - sleeping：`z` (dim line)
     - finished/done：`◉` (dim line)
     - cancelled：`×` (dim + strike line)
+    - promoted(Idea): `⇡` (bold line, dim text)
 - Type + index + name: `Track/Project/Todo <index>: <name>`
 - flags: 
     - has description: `[≡]`
@@ -214,7 +217,7 @@ Display Format:
 - Deadline: `YYYY-MM-DD` (Red date if past)
 
 Example:
-`📌 Project 1: Backend [≡] [⧗3] [✎1]      ♥ ⭑ ⚡ 2025-12-31`
+`⎈ Project 1: Backend [≡] [⧗3] [✎1]      ♥ ⭑ ⚡ 2025-12-31`
 `○ Todo 1: Buy Groceries [↗] [⧗1] [✎1]`
 
 **Structure Level: Tracks**
@@ -239,21 +242,17 @@ Simple List.
 
 Simple List.
 
+
 ### 3. Info 详细信息
 
-- Quit Info View: `i` / `Escape`
 - Move Cursor: `Up/Down Arrow`
-- Edit Field: `r`
-- 
+现在禁止修改字段值，只能查看
+TODO: Display more information about the item
 
-
-### 4. Box 收集箱
+### 4. Box 收集箱 (View Shortcut: `[` (Box Todos) / `]` (Box Ideas))
 Box 视图用于收集「临时 Todo」和「新项目 Idea」，并提供一条从 Box 归入结构的无压力路径。
 
-- Enter Box: `b`（from any view；进入默认落在 Box Todos）
-- Switch Subview: `[` → Box Todos， `]` → Box Ideas
 - Move Cursor: `↑/↓ Arrow`
-- View Info: `i`
 - Add: `+ / =`
 - Edit: `r`
 - Archive: `a`（二次确认）
@@ -270,7 +269,7 @@ Box 视图用于收集「临时 Todo」和「新项目 Idea」，并提供一条
 
 **Box Idea → Promote to Project**
 
-- Start Promote: `p`（在 Box Ideas 中）
+- Start Promote: `m`（在 Box Ideas 中）
 - 进入 STRUCTURE 后会自动回到 `TRACKS_WITH_PROJECTS_T`
 - Confirm: `Enter`（二次确认）
 - Promote 期间按 `→` 会直接进入 Confirm（不会进入 Project 层）
@@ -304,12 +303,11 @@ Box 视图用于收集「临时 Todo」和「新项目 Idea」，并提供一条
 └────────────────────────────────┘
 ```
 
-- Enter: `A` (from any view)
-- Exit: `Esc` / `A`
+- Enter Archive View: `` ` ``
 - Move Cursor: `↑/↓ Arrow`
-- View Info: `i` (进入 INFO View 查看详细信息)
-- Unarchive Item: `u`
-
+- Unarchive Item: `a` (need confirm)
+- Delete Item: `Backspace` (need confirm)
+- Exit Archive View: `Esc` / `q` / `` ` ``
 
 ### Input Mode 输入模式
 
@@ -319,7 +317,7 @@ Box 视图用于收集「临时 Todo」和「新项目 Idea」，并提供一条
 ```
 
 - Input Purpose Prompt: 
-- 
+TODO: Describe Input Design
 
 例如：
 ```text

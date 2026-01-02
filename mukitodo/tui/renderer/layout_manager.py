@@ -360,17 +360,17 @@ class LayoutManager:
             wrap_lines=False,
         )
         willingness_window = Window(
-            content=FormattedTextControl(lambda: self._renderer.render_input_chip(FormField.WILLINGNESS_HINT, "W")),
+            content=FormattedTextControl(lambda: self._renderer.render_input_chip(FormField.WILLINGNESS_HINT, "♥")),
             height=1,
             wrap_lines=False,
         )
         importance_window = Window(
-            content=FormattedTextControl(lambda: self._renderer.render_input_chip(FormField.IMPORTANCE_HINT, "I")),
+            content=FormattedTextControl(lambda: self._renderer.render_input_chip(FormField.IMPORTANCE_HINT, "⭑")),
             height=1,
             wrap_lines=False,
         )
         urgency_window = Window(
-            content=FormattedTextControl(lambda: self._renderer.render_input_chip(FormField.URGENCY_HINT, "U")),
+            content=FormattedTextControl(lambda: self._renderer.render_input_chip(FormField.URGENCY_HINT, "⚡")),
             height=1,
             wrap_lines=False,
         )

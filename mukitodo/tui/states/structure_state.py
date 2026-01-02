@@ -725,6 +725,36 @@ class StructureState:
                 self._current_todo_id = self._current_todos_list[self._selected_todo_idx]["id"]
             else:
                 self._current_todo_id = None
+
+    def focus_track_by_id(self, track_id: int) -> None:
+        """Focus a track by id (keeps current level when possible)."""
+        self.load_current_lists()
+        for idx, t in enumerate(self._current_tracks_list):
+            if int(t.get("id")) == int(track_id):
+                self._selected_track_idx = idx
+                self.load_current_lists()
+                return
+
+    def focus_project_by_id(self, project_id: int, *, enter_project_level: bool = True) -> None:
+        """Focus a project by id under current track. Optionally enter project level."""
+        if enter_project_level:
+            self._structure_level = StructureLevel.TRACKS_WITH_PROJECTS_P
+            self._selected_todo_idx = None
+        self.load_current_lists()
+        for idx, p in enumerate(self._current_projects_list):
+            if int(p.get("id")) == int(project_id):
+                self._selected_project_idx = idx
+                self.load_current_lists()
+                return
+
+    def focus_todo_by_id(self, todo_id: int) -> None:
+        """Focus a todo by id under current project."""
+        self.load_current_lists()
+        for idx, t in enumerate(self._current_todos_list):
+            if int(t.get("id")) == int(todo_id):
+                self._selected_todo_idx = idx
+                self.load_current_lists()
+                return
     
     
 

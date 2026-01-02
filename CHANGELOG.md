@@ -257,4 +257,21 @@ cli.py
                 -> models: return model objects
 ```
 
-### v0.0.5 (b) 
+### v0.0.6 2026-01-01 细节优化，第一个完整功能可用版本
+
+1. 优化快捷键设计
+2. 优化视图切换逻辑
+3. 优化Input字段编辑显示
+4. 修复 bug：add item 之后，focus 丢失。focus 需要在新增的项目上
+
+
+
+
+
+### Future TODO:
+
+1. URL 解析和跳转
+2. 记录 Done List
+3. NOW 行动器增加任务推荐功能
+4. NOW 行动器增加 Pin Item 功能
+5. 
