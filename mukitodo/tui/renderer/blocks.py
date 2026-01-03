@@ -464,7 +464,18 @@ def archive_content(*, state, h: RenderHelpers) -> ViewContent:
                 else:
                     style = f"class:todo.{todo.get('status','active')}"
                 marker = "✓" if todo.get("status") == "done" else "○"
-                lines.append(h.text_line(f"{prefix}    {marker} {todo.get('name','')}", style))
+                try:
+                    total = int(todo.get("total_stages") or 1)
+                except Exception:
+                    total = 1
+                try:
+                    cur = int(todo.get("current_stage") or 0)
+                except Exception:
+                    cur = 0
+                total = max(1, total)
+                cur = max(0, min(cur, total))
+                progress = f" [{cur}/{total}]"
+                lines.append(h.text_line(f"{prefix}    {marker} {todo.get('name','')}{progress}", style))
                 if is_selected:
                     selection = SelectedLine(line_idx=len(lines) - 1)
                 flat_idx += 1
@@ -495,7 +506,18 @@ def archive_content(*, state, h: RenderHelpers) -> ViewContent:
             else:
                 style = f"class:todo.{todo.get('status','active')}"
             marker = "✓" if todo.get("status") == "done" else "○"
-            lines.append(h.text_line(f"{prefix}{marker} Todo: {todo.get('name','')}", style))
+            try:
+                total = int(todo.get("total_stages") or 1)
+            except Exception:
+                total = 1
+            try:
+                cur = int(todo.get("current_stage") or 0)
+            except Exception:
+                cur = 0
+            total = max(1, total)
+            cur = max(0, min(cur, total))
+            progress = f" [{cur}/{total}]"
+            lines.append(h.text_line(f"{prefix}{marker} Todo: {todo.get('name','')}{progress}", style))
             if is_selected:
                 selection = SelectedLine(line_idx=len(lines) - 1)
             flat_idx += 1

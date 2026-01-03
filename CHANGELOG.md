@@ -264,6 +264,28 @@ cli.py
 3. 优化Input字段编辑显示
 4. 修复 bug：add item 之后，focus 丢失。focus 需要在新增的项目上
 
+### v0.0.7 2026-01-02 TODO 新增数量/阶段功能
+
+我发现一个新需求
+就是有时候一个 todo 有多个阶段，或者要重复多次，比如做 LeetCode 题目，可能我的一个 Todo 是做 10 道题目
+
+所以增加一个 total_stages 和 current_stage 字段，来记录当前进度
+
+在按 Space 的时候，就增加阶段数，直到 total_stages 再标记为完成
+
+实现细节（v1）：
+- Space（STRUCTURE -> TODOS）：
+  - status=active：current_stage +1，达到 total_stages 时自动标记 done，并把 current_stage 设为 total_stages
+  - status=done：撤销 done，status->active，并把 current_stage 设为 total_stages-1
+  - status=sleeping/cancelled：仅恢复到 active（不推进阶段）
+- Input Mode（Todo 新增/编辑）：
+  - 增加两个 chip：T（total_stages）、S（current_stage），用 ↑/↓（以及 +/-）调整
+  - 手动最多只能把 current_stage 调到 total_stages-1
+  - 当 status=done 时 current_stage 不可调整；修改 total_stages 会保持“满进度”
+- UI 显示：
+  - STRUCTURE / BOX / NOW / ARCHIVE 的 Todo 行都会显示进度：[current/total]
+- 数据库：
+  - 不做迁移也不提示；旧库请自行删除 `~/.mukitodo/todo.db` 以重建
 
 
 
@@ -274,4 +296,4 @@ cli.py
 2. 记录 Done List
 3. NOW 行动器增加任务推荐功能
 4. NOW 行动器增加 Pin Item 功能
-5. 
+5. 中文输入法操作优化

@@ -632,19 +632,35 @@ def create_structure_todo(
     name: str,
     description: str | None = None,
     url: str | None = None,
-    deadline: datetime | None = None
+    deadline: datetime | None = None,
+    total_stages: int = 1,
+    current_stage: int = 0,
 ) -> Result:
     '''Create a new structure todo item. Result.data: todo_item_id. Default status: active'''
     if not name:
         return Result(False, None, "Todo name is required")
     
     with db_session() as session:
+        try:
+            total_stages_int = int(total_stages)
+        except Exception:
+            return Result(False, None, "total_stages must be an integer")
+        try:
+            current_stage_int = int(current_stage)
+        except Exception:
+            return Result(False, None, "current_stage must be an integer")
+
+        total_stages_int = max(1, total_stages_int)
+        current_stage_int = max(0, min(current_stage_int, total_stages_int))
+
         todo = TodoItem(
             project_id=project_id,
             name=name,
             description=description,
             url=url,
-            deadline_utc=deadline
+            deadline_utc=deadline,
+            total_stages=total_stages_int,
+            current_stage=current_stage_int,
         )
         session.add(todo)
         session.flush()  # Get todo.id
@@ -659,19 +675,35 @@ def create_box_todo(
     name: str,
     description: str | None = None,
     url: str | None = None,
-    deadline: datetime | None = None
+    deadline: datetime | None = None,
+    total_stages: int = 1,
+    current_stage: int = 0,
 ) -> Result:
     '''Create a new box todo item. Result.data: todo_item_id. Default status: active'''
     if not name:
         return Result(False, None, "Todo name is required")
     
     with db_session() as session:
+        try:
+            total_stages_int = int(total_stages)
+        except Exception:
+            return Result(False, None, "total_stages must be an integer")
+        try:
+            current_stage_int = int(current_stage)
+        except Exception:
+            return Result(False, None, "current_stage must be an integer")
+
+        total_stages_int = max(1, total_stages_int)
+        current_stage_int = max(0, min(current_stage_int, total_stages_int))
+
         todo = TodoItem(
             project_id=None,
             name=name,
             description=description,
             url=url,
-            deadline_utc=deadline
+            deadline_utc=deadline,
+            total_stages=total_stages_int,
+            current_stage=current_stage_int,
         )
         session.add(todo)
         session.flush()  # Get todo.id
@@ -899,9 +931,165 @@ def done_todo(todo_item_id: int) -> Result:
         
         todo_name = todo.name
         todo.status = "done"
+        # Stage semantics: "done" implies full progress.
+        todo.current_stage = int(todo.total_stages or 1)
         todo.completed_at_utc = datetime.now(timezone.utc)
     
     return Result(True, None, f"Todo '{todo_name}' marked as done")
+
+
+def update_todo_stages(todo_item_id: int, *, total_stages: int | None = None, current_stage: int | None = None) -> Result:
+    """
+    Update stage fields for a todo.
+
+    Notes:
+    - We keep DB consistency: total_stages >= 1, 0 <= current_stage <= total_stages.
+    - We don't auto-change status here; status semantics are handled by status actions and `advance_todo_stage`.
+    """
+    if total_stages is None and current_stage is None:
+        return Result(True, None, "No stage changes")
+
+    with db_session() as session:
+        todo = session.query(TodoItem).filter_by(id=todo_item_id).first()
+        if not todo:
+            return Result(False, None, f"Todo {todo_item_id} not found")
+
+        # Normalize inputs
+        if total_stages is not None:
+            try:
+                total_int = int(total_stages)
+            except Exception:
+                return Result(False, None, "total_stages must be an integer")
+            total_int = max(1, total_int)
+        else:
+            total_int = int(todo.total_stages or 1)
+
+        if current_stage is not None:
+            try:
+                current_int = int(current_stage)
+            except Exception:
+                return Result(False, None, "current_stage must be an integer")
+        else:
+            current_int = int(todo.current_stage or 0)
+
+        # Clamp to DB-safe range.
+        current_int = max(0, min(current_int, total_int))
+
+        todo.total_stages = total_int
+        todo.current_stage = current_int
+
+        # If todo is done, we keep the invariant "full progress" (requested behavior elsewhere assumes this).
+        if todo.status == "done":
+            todo.current_stage = int(todo.total_stages or 1)
+
+        todo_name = todo.name
+
+    return Result(True, None, f"Todo '{todo_name}' stages updated")
+
+
+def advance_todo_stage(todo_item_id: int) -> Result:
+    """
+    Space behavior for staged Todos.
+
+    Rules (per spec):
+    - sleeping/cancelled: only set to active (no stage change)
+    - done: undo to active and set current_stage = total_stages - 1
+    - active: current_stage++ until total_stages; then mark done and set current_stage = total_stages
+    """
+    with db_session() as session:
+        todo = session.query(TodoItem).filter_by(id=todo_item_id).first()
+        if not todo:
+            return Result(False, None, f"Todo {todo_item_id} not found")
+
+        total = int(todo.total_stages or 1)
+        total = max(1, total)
+        cur = int(todo.current_stage or 0)
+        cur = max(0, min(cur, total))
+
+        todo_name = todo.name
+        status = str(todo.status or "active")
+
+        if status in ("sleeping", "cancelled"):
+            todo.status = "active"
+            todo.completed_at_utc = None
+            return Result(True, None, f"Todo '{todo_name}' activated")
+
+        if status == "done":
+            todo.status = "active"
+            todo.completed_at_utc = None
+            todo.total_stages = total
+            todo.current_stage = max(0, total - 1)
+            return Result(True, None, f"Todo '{todo_name}' undone ({todo.current_stage}/{todo.total_stages})")
+
+        # Active (or any other non-done status): advance
+        todo.status = "active"
+        todo.completed_at_utc = None
+        todo.total_stages = total
+
+        if cur < total - 1:
+            todo.current_stage = cur + 1
+            return Result(True, None, f"Todo '{todo_name}' progress {todo.current_stage}/{todo.total_stages}")
+
+        # Finish
+        todo.status = "done"
+        todo.current_stage = total
+        todo.completed_at_utc = datetime.now(timezone.utc)
+        return Result(True, None, f"Todo '{todo_name}' marked as done ({todo.current_stage}/{todo.total_stages})")
+
+
+def apply_todo_stage_delta(todo_item_id: int, *, stages_completed: int) -> Result:
+    """
+    Apply a multi-stage progress update (used by NOW finish-session flow).
+
+    Semantics:
+    - stages_completed is how many stages were completed in this session.
+    - If reaching total_stages, mark todo as done and set current_stage = total_stages.
+    - If not reaching total_stages, keep status active and clamp current_stage to <= total_stages-1.
+    """
+    try:
+        delta = int(stages_completed)
+    except Exception:
+        return Result(False, None, "stages_completed must be an integer")
+    if delta < 0:
+        return Result(False, None, "stages_completed must be >= 0")
+
+    with db_session() as session:
+        todo = session.query(TodoItem).filter_by(id=todo_item_id).first()
+        if not todo:
+            return Result(False, None, f"Todo {todo_item_id} not found")
+
+        total = int(todo.total_stages or 1)
+        total = max(1, total)
+        cur = int(todo.current_stage or 0)
+        cur = max(0, min(cur, total))
+        status = str(todo.status or "active")
+        todo_name = todo.name
+
+        # If it's done already, keep as-is.
+        if status == "done":
+            todo.current_stage = total
+            return Result(True, None, f"Todo '{todo_name}' already done ({todo.current_stage}/{todo.total_stages})")
+
+        # Wake up if needed.
+        if status in ("sleeping", "cancelled"):
+            todo.status = "active"
+            todo.completed_at_utc = None
+            status = "active"
+
+        # Apply delta.
+        nxt = cur + delta
+        if nxt >= total:
+            todo.status = "done"
+            todo.total_stages = total
+            todo.current_stage = total
+            todo.completed_at_utc = datetime.now(timezone.utc)
+            return Result(True, None, f"Todo '{todo_name}' marked as done ({todo.current_stage}/{todo.total_stages})")
+
+        todo.status = "active"
+        todo.total_stages = total
+        todo.current_stage = max(0, min(nxt, total - 1))
+        todo.completed_at_utc = None
+        return Result(True, None, f"Todo '{todo_name}' progress {todo.current_stage}/{todo.total_stages}")
 
 
 def sleep_todo(todo_item_id: int) -> Result:

@@ -74,11 +74,18 @@ class LayoutManager:
         self._show_project_hints = Condition(lambda: self._state.input_state.form_type == FormType.PROJECT)
         self._show_takeaway_type = Condition(lambda: self._state.input_state.form_type == FormType.TAKEAWAY)
         self._show_idea_hints = Condition(lambda: self._state.input_state.form_type == FormType.BOX_IDEA)
+        self._show_todo_stages = Condition(lambda: self._state.input_state.form_type in (FormType.STRUCTURE_TODO, FormType.BOX_TODO))
+        self._show_now_stage_update = Condition(lambda: self._state.input_state.form_type == FormType.NOW_STAGE_UPDATE)
 
         self._is_current_title = Condition(lambda: self._state.input_state.current_field == FormField.TITLE)
         self._is_current_deadline = Condition(lambda: self._state.input_state.current_field == FormField.DEADLINE)
         self._is_current_date = Condition(lambda: self._state.input_state.current_field == FormField.DATE)
         self._is_current_content = Condition(lambda: self._state.input_state.current_field == FormField.CONTENT)
+
+        # For NOW stage prompt, we only want to show the stage chip.
+        self._show_text_fields = Condition(lambda: self._state.input_state.form_type != FormType.NOW_STAGE_UPDATE)
+        self._show_deadline_and_text = self._show_text_fields & self._show_deadline
+        self._show_date_and_text = self._show_text_fields & self._show_date
 
     # ==========================================================================
     # Public API
@@ -374,6 +381,17 @@ class LayoutManager:
             height=1,
             wrap_lines=False,
         )
+        stage_window = Window(
+            # Unified stage chip display: [C/T]
+            content=FormattedTextControl(lambda: self._renderer.render_input_chip(FormField.CURRENT_STAGE, "")),
+            height=1,
+            wrap_lines=False,
+        )
+        now_stage_done_window = Window(
+            content=FormattedTextControl(lambda: self._renderer.render_input_chip(FormField.STAGES_DONE, "")),
+            height=1,
+            wrap_lines=False,
+        )
 
         # Focus targets used by app.py keybindings
         self._focus_targets.update(
@@ -388,6 +406,10 @@ class LayoutManager:
                 FormField.WILLINGNESS_HINT: willingness_window,
                 FormField.IMPORTANCE_HINT: importance_window,
                 FormField.URGENCY_HINT: urgency_window,
+                # Both stage fields share one visible chip.
+                FormField.TOTAL_STAGES: stage_window,
+                FormField.CURRENT_STAGE: stage_window,
+                FormField.STAGES_DONE: now_stage_done_window,
             }
         )
 
@@ -408,6 +430,7 @@ class LayoutManager:
                     edit_window=title_edit_window,
                     display_window=title_display_window,
                     is_current=self._is_current_title,
+                    show=self._show_text_fields,
                 ),
                 Window(width=1),
                 self._build_text_field_slot(
@@ -417,7 +440,7 @@ class LayoutManager:
                     edit_window=deadline_edit_window,
                     display_window=deadline_display_window,
                     is_current=self._is_current_deadline,
-                    show=self._show_deadline,
+                    show=self._show_deadline_and_text,
                 ),
                 self._build_text_field_slot(
                     field=FormField.DATE,
@@ -426,7 +449,7 @@ class LayoutManager:
                     edit_window=date_edit_window,
                     display_window=date_display_window,
                     is_current=self._is_current_date,
-                    show=self._show_date,
+                    show=self._show_date_and_text,
                 ),
             ],
             height=1,
@@ -437,6 +460,10 @@ class LayoutManager:
             [
                 ConditionalContainer(status_window, filter=self._show_status),
                 ConditionalContainer(Window(width=1), filter=self._show_status),
+                ConditionalContainer(stage_window, filter=self._show_todo_stages),
+                ConditionalContainer(Window(width=1), filter=self._show_todo_stages),
+                ConditionalContainer(now_stage_done_window, filter=self._show_now_stage_update),
+                ConditionalContainer(Window(width=1), filter=self._show_now_stage_update),
                 ConditionalContainer(willingness_window, filter=self._show_project_hints),
                 ConditionalContainer(Window(width=1), filter=self._show_project_hints),
                 ConditionalContainer(importance_window, filter=self._show_project_hints),
@@ -454,6 +481,7 @@ class LayoutManager:
                     edit_window=content_edit_window,
                     display_window=content_display_window,
                     is_current=self._is_current_content,
+                    show=self._show_text_fields,
                 ),
             ],
             height=1,

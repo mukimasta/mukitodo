@@ -21,6 +21,7 @@ class FormType(Enum):
     STRUCTURE_TODO = "structure_todo"
     BOX_TODO = "box_todo"
     BOX_IDEA = "box_idea"
+    NOW_STAGE_UPDATE = "now_stage_update"
     # SESSION = "session"
     TAKEAWAY = "takeaway"
 
@@ -34,6 +35,9 @@ class FormField(Enum):
     # Line 2
     TYPE = ("type", set([FormType.TAKEAWAY]))
     STATUS = ("status", set([FormType.TRACK, FormType.PROJECT, FormType.STRUCTURE_TODO, FormType.BOX_TODO, FormType.BOX_IDEA]))
+    TOTAL_STAGES = ("total_stages", set([FormType.STRUCTURE_TODO, FormType.BOX_TODO]))
+    CURRENT_STAGE = ("current_stage", set([FormType.STRUCTURE_TODO, FormType.BOX_TODO]))
+    STAGES_DONE = ("stages_done", set([FormType.NOW_STAGE_UPDATE]))
     MATURITY_HINT = ("maturity_hint", set([FormType.BOX_IDEA]))
     WILLINGNESS_HINT = ("willingness_hint", set([FormType.PROJECT, FormType.BOX_IDEA]))
     IMPORTANCE_HINT = ("importance_hint", set([FormType.PROJECT]))
@@ -157,12 +161,77 @@ class InputState:
             return
 
         if self._current_field == FormField.STATUS:
-            self._field_dict[self._current_field] = self._cycle_status(direction)
+            new_status = self._cycle_status(direction)
+            self._field_dict[self._current_field] = new_status
+
+            # Stage semantics for todos (keep stages consistent with status choice).
+            if self._form_type in (FormType.STRUCTURE_TODO, FormType.BOX_TODO):
+                total = int(self._field_dict.get(FormField.TOTAL_STAGES) or 1)
+                total = max(1, total)
+                cur = int(self._field_dict.get(FormField.CURRENT_STAGE) or 0)
+
+                if new_status == "done":
+                    # Full progress when done (current == total).
+                    self._field_dict[FormField.CURRENT_STAGE] = total
+                else:
+                    # When not done, manual editing max is total-1.
+                    self._field_dict[FormField.CURRENT_STAGE] = max(0, min(cur, total - 1))
             return
 
         if self._current_field in (FormField.MATURITY_HINT, FormField.WILLINGNESS_HINT, FormField.IMPORTANCE_HINT, FormField.URGENCY_HINT):
             delta = int(direction or 1)
             self._field_dict[self._current_field] = self._step_hint(self._field_dict.get(self._current_field), delta)
+            return
+
+        if self._current_field == FormField.STAGES_DONE:
+            # NOW stage update: adjust via ↑/↓ (and +/-). Space no-op.
+            if direction is None:
+                return
+            delta = int(direction)
+            done = int(self._field_dict.get(FormField.STAGES_DONE) or 0)
+            total = int(self._field_dict.get(FormField.TOTAL_STAGES) or 1)
+            cur = int(self._field_dict.get(FormField.CURRENT_STAGE) or 0)
+            total = max(1, total)
+            cur = max(0, min(cur, total))
+            remaining = max(0, total - cur)
+            done = max(0, min(done + delta, remaining))
+            self._field_dict[FormField.STAGES_DONE] = done
+            return
+
+        if self._current_field == FormField.TOTAL_STAGES:
+            # Spec: adjust via ↑/↓ (and +/-). Space should be no-op.
+            if direction is None:
+                return
+            delta = int(direction)
+            total = int(self._field_dict.get(FormField.TOTAL_STAGES) or 1)
+            total = max(1, total + delta)
+            self._field_dict[FormField.TOTAL_STAGES] = total
+
+            status = str(self._field_dict.get(FormField.STATUS) or "active")
+            cur = int(self._field_dict.get(FormField.CURRENT_STAGE) or 0)
+            if status == "done":
+                # Done implies full progress.
+                self._field_dict[FormField.CURRENT_STAGE] = total
+            else:
+                # Manual editing max is total-1.
+                self._field_dict[FormField.CURRENT_STAGE] = max(0, min(cur, total - 1))
+            return
+
+        if self._current_field == FormField.CURRENT_STAGE:
+            # Spec: when done, current_stage cannot be edited.
+            status = str(self._field_dict.get(FormField.STATUS) or "active")
+            if status == "done":
+                return
+            # Spec: adjust via ↑/↓ (and +/-). Space should be no-op.
+            if direction is None:
+                return
+            delta = int(direction)
+            total = int(self._field_dict.get(FormField.TOTAL_STAGES) or 1)
+            total = max(1, total)
+            cur = int(self._field_dict.get(FormField.CURRENT_STAGE) or 0)
+            nxt = cur + delta
+            nxt = max(0, min(nxt, total - 1))
+            self._field_dict[FormField.CURRENT_STAGE] = nxt
             return
 
         # Other fields: no-op for now
@@ -200,6 +269,24 @@ class InputState:
         """Compact display string for chips."""
         if field == FormField.STATUS:
             return str(self._field_dict.get(field) or "active")
+        if field == FormField.TOTAL_STAGES:
+            try:
+                n = int(self._field_dict.get(field) or 1)
+            except Exception:
+                n = 1
+            return str(max(1, n))
+        if field == FormField.CURRENT_STAGE:
+            try:
+                n = int(self._field_dict.get(field) or 0)
+            except Exception:
+                n = 0
+            return str(max(0, n))
+        if field == FormField.STAGES_DONE:
+            try:
+                n = int(self._field_dict.get(field) or 0)
+            except Exception:
+                n = 0
+            return str(max(0, n))
         if field in (FormField.MATURITY_HINT, FormField.WILLINGNESS_HINT, FormField.IMPORTANCE_HINT, FormField.URGENCY_HINT):
             # Display as bar blocks (README): ▁ ▂ ▅ █  (0..3)
             v = self._field_dict.get(field)
@@ -241,11 +328,20 @@ class InputState:
                 FormField.CONTENT,
             ]
         if self._form_type in (FormType.STRUCTURE_TODO, FormType.BOX_TODO):
-            return [FormField.TITLE, FormField.DEADLINE, FormField.STATUS, FormField.CONTENT]
+            return [
+                FormField.TITLE,
+                FormField.DEADLINE,
+                FormField.STATUS,
+                FormField.CURRENT_STAGE,
+                FormField.TOTAL_STAGES,
+                FormField.CONTENT,
+            ]
         if self._form_type == FormType.BOX_IDEA:
             return [FormField.TITLE, FormField.STATUS, FormField.MATURITY_HINT, FormField.WILLINGNESS_HINT, FormField.CONTENT]
         if self._form_type == FormType.TAKEAWAY:
             return [FormField.TITLE, FormField.DATE, FormField.TYPE, FormField.CONTENT]
+        if self._form_type == FormType.NOW_STAGE_UPDATE:
+            return [FormField.STAGES_DONE]
         return []
 
     def is_text_field(self, field: FormField) -> bool:
@@ -314,6 +410,13 @@ class InputState:
                 self._field_dict[field] = ""
             elif field == FormField.STATUS:
                 self._field_dict[field] = "active"
+            elif field == FormField.TOTAL_STAGES:
+                self._field_dict[field] = 1
+            elif field == FormField.CURRENT_STAGE:
+                self._field_dict[field] = 0
+            elif field == FormField.STAGES_DONE:
+                # Default to 1 stage completed in the session.
+                self._field_dict[field] = 1
             elif field == FormField.TYPE:
                 self._field_dict[field] = "action"
             elif field in (FormField.MATURITY_HINT, FormField.WILLINGNESS_HINT, FormField.IMPORTANCE_HINT, FormField.URGENCY_HINT):
@@ -354,6 +457,8 @@ class InputState:
                 FormField.TITLE: result.data.get("name", ""),
                 FormField.DEADLINE: deadline_str,
                 FormField.STATUS: result.data.get("status", "active"),
+                FormField.TOTAL_STAGES: int(result.data.get("total_stages") or 1),
+                FormField.CURRENT_STAGE: int(result.data.get("current_stage") or 0),
                 FormField.CONTENT: result.data.get("description") or "",
             }
         elif form_type == FormType.BOX_IDEA:
@@ -378,6 +483,23 @@ class InputState:
                 FormField.TYPE: result.data.get("type") or "action",
                 FormField.DATE: date_str,
                 FormField.CONTENT: result.data.get("content") or "",
+            }
+        elif form_type == FormType.NOW_STAGE_UPDATE:
+            # current_item_id is todo_id
+            result = actions.get_todo_dict(current_item_id)
+            if not result.success:
+                raise ValueError(f"[Action Error] Failed to get todo dict: {result.message}")
+            total = int(result.data.get("total_stages") or 1)
+            cur = int(result.data.get("current_stage") or 0)
+            total = max(1, total)
+            cur = max(0, min(cur, total))
+            remaining = max(0, total - cur)
+            field_dict = {
+                # Used for clamping only (not necessarily shown).
+                FormField.TOTAL_STAGES: total,
+                FormField.CURRENT_STAGE: cur,
+                # Default: 1, but clamp to remaining.
+                FormField.STAGES_DONE: min(1, remaining),
             }
         else:
             raise ValueError(f"Invalid form type: {form_type}")
@@ -474,20 +596,32 @@ class InputState:
             if self._context_project_id is None:
                 return Result(False, None, "No project selected for new todo")
             deadline = self._parse_deadline_datetime_utc(self.get_field_str(FormField.DEADLINE))
+            total_stages = int(self._field_dict.get(FormField.TOTAL_STAGES) or 1)
+            total_stages = max(1, total_stages)
+            current_stage = int(self._field_dict.get(FormField.CURRENT_STAGE) or 0)
+            current_stage = max(0, min(current_stage, total_stages - 1))
             result = actions.create_structure_todo(
                 project_id=self._context_project_id,
                 name=title,
                 description=content or None,
                 deadline=deadline,
+                total_stages=total_stages,
+                current_stage=current_stage,
             )
             created_id = result.data if result.success else None
 
         elif self._form_type == FormType.BOX_TODO:
             deadline = self._parse_deadline_datetime_utc(self.get_field_str(FormField.DEADLINE))
+            total_stages = int(self._field_dict.get(FormField.TOTAL_STAGES) or 1)
+            total_stages = max(1, total_stages)
+            current_stage = int(self._field_dict.get(FormField.CURRENT_STAGE) or 0)
+            current_stage = max(0, min(current_stage, total_stages - 1))
             result = actions.create_box_todo(
                 name=title,
                 description=content or None,
                 deadline=deadline,
+                total_stages=total_stages,
+                current_stage=current_stage,
             )
             created_id = result.data if result.success else None
 
@@ -505,6 +639,9 @@ class InputState:
             takeaway_date = self._parse_date_yyyy_mm_dd(self.get_field_str(FormField.DATE)) or date_type.today()
             raw_title = self.get_field_str(FormField.TITLE).strip()
             takeaway_title = raw_title or None
+            # New rule: if content is empty, auto use title as content.
+            if not content and raw_title:
+                content = raw_title
             if self._context_todo_item_id is not None:
                 result = actions.create_takeaway(
                     title=takeaway_title,
@@ -534,6 +671,13 @@ class InputState:
             else:
                 return Result(False, None, "No parent selected for new takeaway")
             created_id = result.data if result.success else None
+
+        elif self._form_type == FormType.NOW_STAGE_UPDATE:
+            if self._current_item_id is None:
+                return Result(False, None, "No todo selected for stage update")
+            stages_done = int(self._field_dict.get(FormField.STAGES_DONE) or 0)
+            result = actions.apply_todo_stage_delta(self._current_item_id, stages_completed=stages_done)
+            created_id = None
 
         else:
             return Result(False, None, f"Unsupported form type: {self._form_type.value}")
@@ -643,6 +787,21 @@ class InputState:
                 r = apply(actions.update_todo_deadline(item_id, self._parse_deadline_datetime_utc(new_deadline)))
                 if not r.success:
                     return r
+
+            # stages
+            new_total = int(self._field_dict.get(FormField.TOTAL_STAGES) or 1)
+            new_total = max(1, new_total)
+            new_cur = int(self._field_dict.get(FormField.CURRENT_STAGE) or 0)
+            new_cur = max(0, min(new_cur, new_total))
+            old_total = int(self._original_field_dict.get(FormField.TOTAL_STAGES) or 1)
+            old_total = max(1, old_total)
+            old_cur = int(self._original_field_dict.get(FormField.CURRENT_STAGE) or 0)
+            old_cur = max(0, min(old_cur, old_total))
+            if (new_total, new_cur) != (old_total, old_cur):
+                r = apply(actions.update_todo_stages(item_id, total_stages=new_total, current_stage=new_cur))
+                if not r.success:
+                    return r
+
             status = str(self._field_dict.get(FormField.STATUS) or "active")
             old_status = str(self._original_field_dict.get(FormField.STATUS) or "active")
             if status != old_status:

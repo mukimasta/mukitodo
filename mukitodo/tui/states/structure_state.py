@@ -216,13 +216,11 @@ class StructureState:
             if not todo:
                 return
 
-            current_status = todo.get("status", "active")
-
-            # Toggle logic: done ↔ active, others → active
-            if current_status == "active":
-                result = actions.done_todo(self._current_todo_id) # type: ignore
-            else:
-                result = actions.activate_todo(self._current_todo_id) # type: ignore
+            # Stage-aware Space behavior (see CHANGELOG v0.0.7):
+            # - active: advance stage; finish at total_stages
+            # - done: undo to active and set stage to total-1
+            # - sleeping/cancelled: only activate (no stage change)
+            result = actions.advance_todo_stage(self._current_todo_id)  # type: ignore
 
             self.load_current_lists()
             self._message.set(result)

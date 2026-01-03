@@ -102,6 +102,14 @@ class TodoItem(Base):
             "(status = 'done' AND completed_at_utc IS NOT NULL) OR (status != 'done' AND completed_at_utc IS NULL)",
             name="todo_item_completed_consistency"
         ),
+        CheckConstraint(
+            "total_stages >= 1",
+            name="todo_item_total_stages_min_1",
+        ),
+        CheckConstraint(
+            "current_stage >= 0 AND current_stage <= total_stages",
+            name="todo_item_stage_range",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -111,6 +119,8 @@ class TodoItem(Base):
     url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     deadline_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)
+    total_stages: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    current_stage: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     completed_at_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -129,6 +139,8 @@ class TodoItem(Base):
             "deadline_utc": self.deadline_utc,
             "deadline_local": self.deadline_utc.astimezone(local_timezone) if self.deadline_utc else None,
             "status": self.status,
+            "total_stages": self.total_stages,
+            "current_stage": self.current_stage,
             "archived": self.archived,
             "created_at_utc": self.created_at_utc,
             "completed_at_utc": self.completed_at_utc,

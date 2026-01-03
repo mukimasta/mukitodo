@@ -285,6 +285,9 @@ class Renderer:
         if purpose is None or form_type is None:
             return [("class:dim", "")]
 
+        if form_type == FormType.NOW_STAGE_UPDATE:
+            return [("class:mode", "[Finish Session: Stages Done]")]
+
         verb = "New" if purpose == InputPurpose.ADD else "Edit"
         label = form_type.value.replace("_", " ").title()
         return [("class:mode", f"[{verb} {label}]")]
@@ -309,6 +312,39 @@ class Renderer:
             s = str(value or "active")
             display = s.replace("_", " ").title()
             return [(style, f"[{display}]")]
+
+        if field in (FormField.TOTAL_STAGES, FormField.CURRENT_STAGE):
+            # Stage display: always show as [C/T] (e.g. [3/10]).
+            try:
+                total = int(input_state.get_field_display(FormField.TOTAL_STAGES) or 1)
+            except Exception:
+                total = 1
+            try:
+                cur = int(input_state.get_field_display(FormField.CURRENT_STAGE) or 0)
+            except Exception:
+                cur = 0
+            total = max(1, total)
+            cur = max(0, min(cur, total))
+
+            # Highlight only the selected side:
+            # - current_stage selected -> highlight left number
+            # - total_stages selected -> highlight right number
+            left_style = "class:selected" if input_state.current_field == FormField.CURRENT_STAGE else "class:dim"
+            right_style = "class:selected" if input_state.current_field == FormField.TOTAL_STAGES else "class:dim"
+            bracket_style = "class:dim"
+            return [
+                (bracket_style, "["),
+                (left_style, str(cur)),
+                (bracket_style, "/"),
+                (right_style, str(total)),
+                (bracket_style, "]"),
+            ]
+
+        if field == FormField.STAGES_DONE:
+            # Display as a single numeric chip: [+k]
+            # (Used by NOW finish-session stage update prompt)
+            n = str(value or "0")
+            return [("class:selected" if input_state.current_field == field else "class:dim", f"[+{n}]")]
 
         if field in (FormField.WILLINGNESS_HINT, FormField.IMPORTANCE_HINT, FormField.URGENCY_HINT):
             icon = {
@@ -531,6 +567,22 @@ class Renderer:
         icon = self._STATUS_ICON_MAP.get(status, "○")
 
         left = f"{icon} {item_type.capitalize()} {index_1based}: {item.get('name','')}"
+
+        # Stage progress (Todos only): always display.
+        if item_type == "todo":
+            try:
+                total = int(item.get("total_stages") or 1)
+            except Exception:
+                total = 1
+            try:
+                cur = int(item.get("current_stage") or 0)
+            except Exception:
+                cur = 0
+            total = max(1, total)
+            cur = max(0, min(cur, total))
+            if total > 1:
+                left = left + f" [{cur}/{total}]"
+
         flags = self._structure_flags(item_type, item)
         if flags:
             left = left + " " + " ".join(flags)
@@ -679,9 +731,20 @@ class Renderer:
 
         if project and todo:
             marker = "✓" if todo["status"] == "done" else "○"
+            try:
+                total = int(todo.get("total_stages") or 1)
+            except Exception:
+                total = 1
+            try:
+                cur = int(todo.get("current_stage") or 0)
+            except Exception:
+                cur = 0
+            total = max(1, total)
+            cur = max(0, min(cur, total))
+            progress = f" [{cur}/{total}]"
             return [
                 ("", f"{project['name']}"),
-                ("", f"{marker} {todo['name']}")
+                ("", f"{marker} {todo['name']}{progress}")
             ]
         elif project:
             # Only project selected, no specific todo
