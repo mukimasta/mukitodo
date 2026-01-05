@@ -287,13 +287,23 @@ cli.py
 - 数据库：
   - 不做迁移也不提示；旧库请自行删除 `~/.mukitodo/todo.db` 以重建
 
+### v0.0.8 2026-01-02  NOW 完成提醒及休息功能
 
+- 计时剩余 5 分钟时，响铃提醒
+- 计时结束时
+    - 响铃提醒
+    - 激活至最前台 iTerm2（macOS 下）
+    - 自动进入 Finish Session 流程，询问 Takeaways 并保存
+    - 若用户取消 Finish Session，则重置计时
+    - 若用户保存 Session，则进入 5 分钟休息模式，按 Space 开始休息
+    - 休息结束时，响铃提醒，并重置计时
+    
 
 
 ### Future TODO:
 
 1. URL 解析和跳转
 2. 记录 Done List
-3. NOW 行动器增加任务推荐功能
+3. NOW 行动器增加任务推荐功能 
 4. NOW 行动器增加 Pin Item 功能
 5. 中文输入法操作优化

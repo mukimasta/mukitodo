@@ -1,14 +1,55 @@
 import asyncio
+import subprocess
+import sys
 from prompt_toolkit import Application
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.filters import Condition
 
+from mukitodo.actions import Result
 from mukitodo.tui.states.box_state import BoxSubview
 
 from .states.app_state import AppState, UIMode, View, ConfirmAction
-from .states.now_state import TimerStateEnum
+from .states.now_state import TimerStateEnum, TimerEventEnum
 from .states.input_state import InputPurpose
 from .renderer import Renderer, LayoutManager
+
+
+def _activate_iterm2_macos() -> None:
+    """
+    Best-effort bring iTerm2 to the foreground on macOS.
+
+    Spec requires only bringing the app to front (no specific window/tab).
+    We try both application names: "iTerm" and "iTerm2".
+    """
+    scripts = [
+        'tell application "iTerm" to activate',
+        'tell application "iTerm2" to activate',
+    ]
+    for script in scripts:
+        try:
+            subprocess.run(
+                ["osascript", "-e", script],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            break
+        except Exception:
+            continue
+
+
+def _bell(app: Application) -> None:
+    """Best-effort terminal bell (no external deps)."""
+    try:
+        app.output.bell()
+        return
+    except Exception:
+        pass
+    try:
+        sys.stdout.write("\a")
+        sys.stdout.flush()
+    except Exception:
+        return
 
 
 def run():
@@ -494,10 +535,36 @@ def run():
         """Background task to update timer frequently, refresh only when needed."""
         while True:
             await asyncio.sleep(0.1)  # Check 10 times per second for responsiveness
-            if state.view == View.NOW and state.now_state.timer_state == TimerStateEnum.RUNNING:
+            if state.now_state.timer_state == TimerStateEnum.RUNNING:
                 # Only invalidate if timer seconds actually changed
                 if state.now_state.update_timer():
                     app.invalidate()
+
+            # Consume one-shot timer events regardless of view/mode.
+            timer_event = state.now_state.consume_timer_event()
+            if timer_event is None:
+                continue
+
+            _bell(app)
+
+            if timer_event == TimerEventEnum.WORK_5MIN_LEFT:
+                # Subtle: no foreground activation.
+                state.message.set(Result(True, None, "5 minutes left"))
+                app.invalidate()
+                continue
+
+            if timer_event == TimerEventEnum.WORK_TIME_UP:
+                _activate_iterm2_macos()
+                state.message.set(Result(True, None, "Time's up (00:00). Press Enter to finish session, or r to reset"))
+                # Auto-enter confirm; user can cancel and re-enter later via Enter.
+                state.ask_confirm(ConfirmAction.FINISH_SESSION)
+                app.invalidate()
+                continue
+
+            if timer_event == TimerEventEnum.BREAK_TIME_UP:
+                state.message.set(Result(True, None, "Break time is over"))
+                app.invalidate()
+                continue
     
     # Run app with async timer
     async def run_async():

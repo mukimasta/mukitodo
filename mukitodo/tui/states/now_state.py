@@ -12,6 +12,17 @@ class TimerStateEnum(Enum):
     RUNNING = "running"
     PAUSED = "paused"
 
+class TimerPhaseEnum(Enum):
+    """Phase of the NOW timer."""
+    WORK = "work"
+    BREAK = "break"
+
+class TimerEventEnum(Enum):
+    """One-shot timer events emitted by NowState and consumed by App layer."""
+    WORK_5MIN_LEFT = "work_5min_left"
+    WORK_TIME_UP = "work_time_up"
+    BREAK_TIME_UP = "break_time_up"
+
 
 class NowState:
     """State management for NOW view (action timer and session tracking).
@@ -40,6 +51,14 @@ class NowState:
         self._remaining_seconds: int = 25 * 60
         self._timer_start_timestamp: float | None = None
         self._paused_remaining: int | None = None
+        self._timer_phase: TimerPhaseEnum = TimerPhaseEnum.WORK
+        self._pending_timer_event: TimerEventEnum | None = None
+        self._work_warned_5min: bool = False
+        # Work time-up latch: keep 00:00 and disable Space/adjust until reset or finish flow.
+        self._work_timeup_latched: bool = False
+        # Break is only prepared after finishing a time-up session flow.
+        self._break_armed_after_finish: bool = False
+        self._break_minutes_default: int = 5
 
         # == Session Tracking ==
         self._session_started_at: datetime | None = None  # For database persistence
@@ -91,12 +110,19 @@ class NowState:
     def toggle_timer(self) -> None:
         """Toggle timer between IDLE/RUNNING/PAUSED states."""
         if self._timer_state == TimerStateEnum.IDLE:
+            # Work time-up latch: Space is a no-op at 00:00 (user must Enter confirm or r reset).
+            if self._timer_phase == TimerPhaseEnum.WORK and self._work_timeup_latched:
+                return
+
             # Start from idle - record session start time
             self._timer_state = TimerStateEnum.RUNNING
             self._timer_start_timestamp = time.time()
             self._remaining_seconds = self._target_minutes * 60
             self._paused_remaining = None
-            self._session_started_at = datetime.now(timezone.utc)  # Record for session
+            # Only WORK phase records session start time (BREAK is a separate timer).
+            if self._timer_phase == TimerPhaseEnum.WORK:
+                self._session_started_at = datetime.now(timezone.utc)  # Record for session
+                self._work_warned_5min = False
 
         elif self._timer_state == TimerStateEnum.RUNNING:
             # Pause - calculate remaining time
@@ -115,22 +141,37 @@ class NowState:
             self._timer_start_timestamp = time.time()
             if self._paused_remaining is not None:
                 self._remaining_seconds = self._paused_remaining
+        
+        self._message.set(EmptyResult)
 
     def reset_timer(self) -> None:
         """Reset timer to IDLE state and clear session tracking."""
+        # Special behavior: BREAK reset returns to WORK idle 25:00.
+        if self._timer_phase == TimerPhaseEnum.BREAK:
+            self._timer_phase = TimerPhaseEnum.WORK
+            self._target_minutes = 25
+            self._remaining_seconds = 25 * 60
+        else:
+            self._remaining_seconds = self._target_minutes * 60
+
         self._timer_state = TimerStateEnum.IDLE
-        self._remaining_seconds = self._target_minutes * 60
         self._timer_start_timestamp = None
         self._paused_remaining = None
         self._session_started_at = None  # Clear session
         self._last_saved_session_id = None  # Clear saved session id
+        self._pending_timer_event = None
+        self._work_warned_5min = False
+        self._work_timeup_latched = False
+        self._break_armed_after_finish = False
 
         # Keep item context and cached data (don't clear _current_*_dict)
         # User may want to restart timer for the same item
+        self._message.set(Result(True, None, "Timer reset"))
 
     def adjust_time(self, delta_minutes: int) -> None:
         """Adjust target time by delta minutes (only when IDLE)."""
-        if self._timer_state == TimerStateEnum.IDLE:
+        # Only allow adjusting WORK idle minutes (BREAK is fixed to default) and not when latched at 00:00.
+        if self._timer_state == TimerStateEnum.IDLE and self._timer_phase == TimerPhaseEnum.WORK and not self._work_timeup_latched:
             new_minutes = max(5, self._target_minutes + delta_minutes)
             self._target_minutes = new_minutes
             self._remaining_seconds = new_minutes * 60
@@ -148,14 +189,72 @@ class NowState:
         else:
             self._remaining_seconds = max(0, self._target_minutes * 60 - elapsed)
 
+        # Work 5-min warning: cross-threshold once (from >5:00 to <=5:00).
+        if self._timer_phase == TimerPhaseEnum.WORK and not self._work_warned_5min:
+            if old_seconds > 5 * 60 and self._remaining_seconds <= 5 * 60:
+                self._work_warned_5min = True
+                self._pending_timer_event = TimerEventEnum.WORK_5MIN_LEFT
+
         # Timer completed
         if self._remaining_seconds == 0:
             self._timer_state = TimerStateEnum.IDLE
             self._timer_start_timestamp = None
             self._paused_remaining = None
+            if self._timer_phase == TimerPhaseEnum.WORK:
+                # Latch at 00:00 for work; user can press Enter to finish or r to reset.
+                self._work_timeup_latched = True
+                self._pending_timer_event = TimerEventEnum.WORK_TIME_UP
+            else:
+                # Break ends: ring and return to WORK idle 25:00.
+                self._pending_timer_event = TimerEventEnum.BREAK_TIME_UP
+                self._timer_phase = TimerPhaseEnum.WORK
+                self._target_minutes = 25
+                self._remaining_seconds = 25 * 60
+                self._work_warned_5min = False
+                self._work_timeup_latched = False
             return True
 
         return old_seconds != self._remaining_seconds
+
+    def consume_timer_event(self) -> TimerEventEnum | None:
+        """Consume and clear the pending one-shot timer event."""
+        e = self._pending_timer_event
+        self._pending_timer_event = None
+        return e
+
+    def arm_break_after_finish(self, minutes: int = 5) -> None:
+        """Arm break idle after the time-up finish flow completes (takeaways done/cancelled)."""
+        try:
+            m = int(minutes)
+        except Exception:
+            m = 5
+        self._break_minutes_default = max(1, m)
+        self._break_armed_after_finish = True
+
+    def maybe_prepare_break_idle(self) -> bool:
+        """
+        If break is armed, enter BREAK idle (default 05:00) and clear session/timeup state.
+        Returns True if BREAK idle was prepared.
+        """
+        if not self._break_armed_after_finish:
+            return False
+
+        self._break_armed_after_finish = False
+
+        self._timer_phase = TimerPhaseEnum.BREAK
+        self._timer_state = TimerStateEnum.IDLE
+        self._target_minutes = int(self._break_minutes_default)
+        self._remaining_seconds = self._target_minutes * 60
+        self._timer_start_timestamp = None
+        self._paused_remaining = None
+
+        # Clear work-session related state.
+        self._session_started_at = None
+        self._last_saved_session_id = None
+        self._pending_timer_event = None
+        self._work_warned_5min = False
+        self._work_timeup_latched = False
+        return True
 
 
     # ========== Session Management ==========
@@ -256,6 +355,20 @@ class NowState:
     @property
     def timer_state(self) -> TimerStateEnum:
         return self._timer_state
+
+    @property
+    def timer_phase(self) -> TimerPhaseEnum:
+        return self._timer_phase
+
+    @property
+    def work_timeup_latched(self) -> bool:
+        """Whether work timer has latched at 00:00 (time-up)."""
+        return self._work_timeup_latched
+
+    @property
+    def break_armed_after_finish(self) -> bool:
+        """Whether break idle is armed to start after the finish-session flow ends."""
+        return self._break_armed_after_finish
 
     @property
     def last_saved_session_id(self) -> int | None:

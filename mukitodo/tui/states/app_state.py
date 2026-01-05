@@ -491,6 +491,11 @@ class AppState:
             self._message.set(result)
             return
 
+        # If this finish was triggered after a WORK time-up (00:00 latch), arm break-after-finish.
+        # Manual finishes should not arm break.
+        if self._now_state.work_timeup_latched:
+            self._now_state.arm_break_after_finish(5)
+
         # Enter INPUT mode for stage update / takeaway creation
         session_id = self._now_state.last_saved_session_id
         if session_id is None:
@@ -683,9 +688,13 @@ class AppState:
 
         # Special: leaving NOW takeaway capture ends the flow.
         if self._view == View.NOW and self._input_state.form_type == FormType.TAKEAWAY and self._input_state.context_now_session_id is not None:
-            # Reset NOW timer after session is fully finished (after takeaway capture).
-            self._now_state.reset_timer()
-            self._message.set(Result(True, None, "Session complete"))
+            # Session is fully finished (after takeaway capture).
+            # If break was armed by a time-up finish, enter BREAK idle 05:00; otherwise reset to WORK idle.
+            if self._now_state.maybe_prepare_break_idle():
+                self._message.set(Result(True, None, "Session complete. Break ready: press Space to start"))
+            else:
+                self._now_state.reset_timer()
+                self._message.set(Result(True, None, "Session complete"))
         self._input_state.clear_input_context()
         self._ui_mode = UIMode.NORMAL
 

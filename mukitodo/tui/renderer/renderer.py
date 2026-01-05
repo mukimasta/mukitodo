@@ -4,7 +4,7 @@ from datetime import datetime
 from prompt_toolkit.styles import Style
 
 from mukitodo.tui.states.app_state import AppState, StructureLevel, UIMode, View
-from mukitodo.tui.states.now_state import TimerStateEnum
+from mukitodo.tui.states.now_state import TimerStateEnum, TimerPhaseEnum
 from mukitodo.tui.states.input_state import FormField, FormType, InputPurpose
 
 from . import blocks
@@ -184,17 +184,36 @@ class Renderer:
             parts = []
             
             # Timer controls
-            if now_state.timer_state == TimerStateEnum.IDLE:
-                parts.append("[Space] Start")
-                parts.append("[+/-] Adjust")
-            elif now_state.timer_state == TimerStateEnum.RUNNING:
-                parts.append("[Space] Pause")
-                parts.append("[r] Reset")
-            else:  # PAUSED
-                parts.append("[Space] Resume")
-                parts.append("[r] Reset")
-            
-            parts.append("[Enter] Finish")
+            if now_state.timer_phase == TimerPhaseEnum.BREAK:
+                # BREAK: no adjust; r returns to WORK idle 25:00.
+                if now_state.timer_state == TimerStateEnum.IDLE:
+                    parts.append("[Space] Start Break")
+                    parts.append("[r] Reset to Work")
+                elif now_state.timer_state == TimerStateEnum.RUNNING:
+                    parts.append("[Space] Pause Break")
+                    parts.append("[r] Reset to Work")
+                else:  # PAUSED
+                    parts.append("[Space] Resume Break")
+                    parts.append("[r] Reset to Work")
+            else:
+                # WORK phase
+                if now_state.timer_state == TimerStateEnum.IDLE:
+                    if now_state.work_timeup_latched:
+                        # At 00:00 latch: Space is disabled; allow Enter or r.
+                        parts.append("[Enter] Finish")
+                        parts.append("[r] Reset")
+                    else:
+                        parts.append("[Space] Start")
+                        parts.append("[+/-] Adjust")
+                        parts.append("[Enter] Finish")
+                elif now_state.timer_state == TimerStateEnum.RUNNING:
+                    parts.append("[Space] Pause")
+                    parts.append("[r] Reset")
+                    parts.append("[Enter] Finish")
+                else:  # PAUSED
+                    parts.append("[Space] Resume")
+                    parts.append("[r] Reset")
+                    parts.append("[Enter] Finish")
             
             # Navigation
             parts.append("[Tab] STRUCTURE")
@@ -776,9 +795,20 @@ class Renderer:
         """Return status content with simple symbols (style, text). Read from now_state cached data."""
         now_state = self.state.now_state
 
+        # Phase-aware status.
+        if now_state.timer_phase == TimerPhaseEnum.BREAK:
+            if now_state.timer_state == TimerStateEnum.RUNNING:
+                return ("class:dim", "▶ Break")
+            if now_state.timer_state == TimerStateEnum.PAUSED:
+                return ("class:dim", "⏸  Break")
+            return ("class:dim", "☕ Break")
+
+        # WORK phase
+        if now_state.work_timeup_latched and now_state.timer_state == TimerStateEnum.IDLE:
+            return ("class:dim", "⏰ Time up")
         if now_state.timer_state == TimerStateEnum.RUNNING:
-            return ("class:dim", "▶ Running")
-        elif now_state.timer_state == TimerStateEnum.PAUSED:
+            return ("class:dim", "▶ Working")
+        if now_state.timer_state == TimerStateEnum.PAUSED:
             return ("class:dim", "⏸  Paused")
 
         # Check todo status from cached data
