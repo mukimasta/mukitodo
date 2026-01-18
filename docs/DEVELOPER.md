@@ -10,7 +10,16 @@ This document details the system architecture and engineering implementation of 
 .
 ├── pyproject.toml          # uv environment management (project config)
 ├── README.md               # README documentation
-├── CHANGELOG.md            # CHANGELOG documentation
+├── docs/
+│   ├── CHANGELOG.md        # CHANGELOG documentation
+│   ├── CHANGELOG_zh.md     # CHANGELOG documentation (Chinese)
+│   ├── DEVELOPER.md        # Developer guide
+│   ├── DEVELOPER_zh.md     # Developer guide (Chinese)
+│   ├── MANUAL.md           # User manual
+│   ├── MANUAL_zh.md        # User manual (Chinese)
+│   ├── PHILOSOPHY.md       # Design philosophy
+│   ├── PHILOSOPHY_zh.md    # Design philosophy (Chinese)
+│   └── assets/             # Documentation assets
 ├── main.py                 # Legacy entry point (optional)
 ├── toflow/
 │   ├── __init__.py         # Package init

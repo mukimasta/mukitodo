@@ -74,7 +74,7 @@ ToFlow comes with complete documentation to help you master the system.
 - **[🛠️ Developer Guide](./docs/DEVELOPER.md)**
   <br>System architecture, data models, and contribution guide.
 
-- **[📝 Changelog](./CHANGELOG.md)**
+- **[📝 Changelog](./docs/CHANGELOG.md)**
   <br>Version history and new features.
 
 ---
