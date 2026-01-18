@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable, Literal
 
-from mukitodo.tui.states.app_state import StructureLevel
+from toflow.tui.states.app_state import StructureLevel
 
 from . import constants
 

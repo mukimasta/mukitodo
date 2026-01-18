@@ -1,6 +1,6 @@
-from mukitodo import actions
-from mukitodo.actions import Result, EmptyResult
-from mukitodo.tui.states.message_holder import MessageHolder
+from toflow import actions
+from toflow.actions import Result, EmptyResult
+from toflow.tui.states.message_holder import MessageHolder
 
 
 class ArchiveState:

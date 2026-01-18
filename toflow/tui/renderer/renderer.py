@@ -3,9 +3,9 @@ from datetime import datetime
 
 from prompt_toolkit.styles import Style
 
-from mukitodo.tui.states.app_state import AppState, StructureLevel, UIMode, View
-from mukitodo.tui.states.now_state import TimerStateEnum, TimerPhaseEnum
-from mukitodo.tui.states.input_state import FormField, FormType, InputPurpose
+from toflow.tui.states.app_state import AppState, StructureLevel, UIMode, View
+from toflow.tui.states.now_state import TimerStateEnum, TimerPhaseEnum
+from toflow.tui.states.input_state import FormField, FormType, InputPurpose
 
 from . import blocks
 from .blocks import Line, Lines, RenderHelpers, SelectedLine, SelectedSpan, ViewContent

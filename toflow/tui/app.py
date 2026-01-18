@@ -5,8 +5,8 @@ from prompt_toolkit import Application
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.filters import Condition
 
-from mukitodo.actions import Result
-from mukitodo.tui.states.box_state import BoxSubview
+from toflow.actions import Result
+from toflow.tui.states.box_state import BoxSubview
 
 from .states.app_state import AppState, UIMode, View, ConfirmAction
 from .states.now_state import TimerStateEnum, TimerEventEnum

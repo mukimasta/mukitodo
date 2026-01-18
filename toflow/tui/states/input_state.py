@@ -1,8 +1,8 @@
 from enum import Enum
 from typing import Any
 
-from mukitodo import actions
-from mukitodo.actions import Result
+from toflow import actions
+from toflow.actions import Result
 from datetime import datetime, date as date_type, time as time_type, timezone
 
 

@@ -1,4 +1,4 @@
-from mukitodo.actions import Result, EmptyResult
+from toflow.actions import Result, EmptyResult
 
 class MessageHolder:
     """Shared message holder that all states can access."""

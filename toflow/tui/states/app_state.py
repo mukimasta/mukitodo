@@ -1,17 +1,17 @@
 from enum import Enum
-from mukitodo import actions
-from mukitodo.actions import Result, EmptyResult
-from mukitodo.tui.states.message_holder import MessageHolder
+from toflow import actions
+from toflow.actions import Result, EmptyResult
+from toflow.tui.states.message_holder import MessageHolder
 
-from mukitodo.tui.states.now_state import NowState
-from mukitodo.tui.states.structure_state import StructureState, StructureLevel
-from mukitodo.tui.states.info_state import InfoState
-from mukitodo.tui.states.archive_state import ArchiveState
-from mukitodo.tui.states.timeline_state import TimelineState
-from mukitodo.tui.states.box_state import BoxState, BoxSubview
+from toflow.tui.states.now_state import NowState
+from toflow.tui.states.structure_state import StructureState, StructureLevel
+from toflow.tui.states.info_state import InfoState
+from toflow.tui.states.archive_state import ArchiveState
+from toflow.tui.states.timeline_state import TimelineState
+from toflow.tui.states.box_state import BoxState, BoxSubview
 
-from mukitodo.tui.states.input_state import FormType, InputPurpose, InputState
-from mukitodo.tui.states.input_state import FormField
+from toflow.tui.states.input_state import FormType, InputPurpose, InputState
+from toflow.tui.states.input_state import FormField
 
 
 class View(Enum):

@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from mukitodo.database import db_session
-from mukitodo.models import Track, Project, TodoItem, IdeaItem, NowSession
+from toflow.database import db_session
+from toflow.models import Track, Project, TodoItem, IdeaItem, NowSession
 
 
 @dataclass

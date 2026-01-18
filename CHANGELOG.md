@@ -1,193 +1,112 @@
-————————
-MukiTodo — Version History / 更新记录
-————————
+# Changelog
 
-### v0.01 2025-12-6 MVP
+**[English](./CHANGELOG.md)** | [简体中文](./CHANGELOG_zh.md)
 
-这是 MukiTodo 的第一个最小可用版本
-我需要的不止是简单的分类 Todo 列表，而是以「项目」为核心的管理系统
+All notable changes to this project will be documented in this file.
 
-版本主要内容：
-1. 确定初始项目结构
-2. 确定 Track -> Project -> Item 的 Todo 层级结构
-3. 确定 TUI -> Actions -> Services -> Models -> Database 架构
-4. 确定 TUI 界面，设计两种操作模式：NORMAL MODE 和 COMMAND MODE。NORMAL MODE 使用方向键这种符合直觉的操作方式，COMMAND MODE 则是命令模式，精确性、拓展性更强
-5. 数据存储使用 SQLite 储存在 home 目录下
-6. 实现 Track、Project、Item 的增删改查功能
+## [Future]
 
-### v0.0.2 2025-12-10 重大更新: 架构设计 / NOW 行动器
+1. URL parsing and jumping
+2. Record Done List
+3. NOW Actioner: Task recommendation
+4. NOW Actioner: Pin Item
+5. Remove local time fields in Model, use UTC for all times
+6. Chinese input method optimization
 
-这是 MukiTodo 的第二个最小可用版本
+## [v0.1.0] - 2026-01-15
+**Fix bugs, optimize experience, launch on GitHub, rename to ToFlow**
 
-1. 重新设计功能设计，逻辑完成 README 的初步编写，包括简介 / 理念，功能设计及设计理念，界面与交互设计等
-2. 新增 NOW 行动器的实现
-3. 重构 TUI 代码
-    1. 重构 TUI state，使用 AppState 类管理状态，以及 NowState 类管理 NOW 行动器状态，StructureState 类管理结构状态
-    2. 重构 TUI renderer，改为 OOP 逻辑，使用 Renderer 类管理渲染逻辑，优化显示
-    3. 实现不同 View 下的不同 Layout 界面
-```text
-├── mukitodo/
-│   ├── tui/                # prompt-toolkit TUI 应用
-│   │   ├── __init__.py     # 初始化
-│   │   ├── state.py        # 状态管理
-│   │   ├── renderer.py     # 渲染器
-│   │   └── app.py          # 按键绑定 + 启动入口
-├── ...
-```
+## [v0.0.9] - 2026-01-04 Major Update
 
-v0.0.2 Code Hierarchy / Data Flow
+**Plan:**
+1. **Time display optimization**: Display local time.
+    - Timeline: Group by local date; Session time shows local time (HH:MM).
+    - Info: All datetime fields show local time.
+    - Data stored as UTC; Models unify SQLite naive datetime as UTC.
+2. **Reordering**: Add order adjustment (Alt+Up/Down, order_index) for structure (track/project/todo) and box (todo/idea).
+3. **Major Change**: Cancel "Takeaway" and all related features. Record session description instead when session ends.
+4. **Adjustment**: Add `pinned` field, remove project `focusing` status.
 
-```
-cli.py
-    -> tui/app.run()
-        -> tui/state.AppState()
-            -> tui/renderer.Renderer(tui_state)
-        -> tui/app.key_bindings
-            -> actions: excute action
-                -> services: request database operations
-                -> models: return model objects
-```
+## [v0.0.8] - 2026-01-02 NOW Completion Reminder & Rest
 
+- Bell reminder when 5 minutes left.
+- When timer ends:
+    - Bell reminder.
+    - Activate iTerm2 (macOS) to foreground.
+    - Auto-enter Finish Session flow, ask for description and save.
+    - If cancelled, reset timer.
+    - If saved, enter 5-minute Rest mode (Press Space to start).
+    - Bell reminder when rest ends, then reset timer.
 
+## [v0.0.7] - 2026-01-02 TODO Quantity/Stage Feature
 
-### v0.0.3 (a) 重大更新: 全新功能设计 / 全新架构设计 / 全新数据库设计 / 大重构
+**New Requirement**: Some todos have multiple stages or repetitions (e.g., 10 LeetCode problems).
+Added `total_stages` and `current_stage` fields to track progress.
 
-大重构：
-1. TUI 只负责交互，tui/app.py 在 tui/state.py 中读写 TUI 状态，所有操作仅与 actions.py 交互，TUI state 仅进行 UI 逻辑检查，不进行业务逻辑检查
-2. 取消 Action -> Service -> Model 架构，改为 actions.py 直接操作数据库
-3. 未来的 CLI 命令行入口将不再直接操作 AppState 状态，也通过 actions.py 行动
+**Implementation Details (v1):**
+- Space (STRUCTURE -> TODOS):
+    - status=active: current_stage +1. If reaches total_stages, auto mark done.
+    - status=done: Undo done (status->active), current_stage = total_stages-1.
+    - status=sleeping/cancelled: Restore to active only.
+- Input Mode (Todo Add/Edit):
+    - Added T (total_stages) and S (current_stage) chips. Adjust with arrows/keys.
+    - Manual adjustment limited to total_stages-1.
+    - Cannot adjust current_stage if done.
+- UI:
+    - Show progress `[current/total]` in STRUCTURE / BOX / NOW / ARCHIVE.
+- Database:
+    - No migration; please delete `~/.mukitodo/todo.db` to rebuild.
 
-actions.py 设计原则：
-1. 以业务操作命名，表达功能操作/用户意图
-2. 不直接返回 Model 数据对象，而是通过 actions 解包为基础类型，例如 str / dict / list 数据
-3. 未来同时支持 TUI 和 CLI
-4. 使用 Context 管理数据库操作
+## [v0.0.6] - 2026-01-01 Polish, First Complete Usable Version
 
+1. Optimize shortcuts.
+2. Optimize view switching logic.
+3. Optimize Input field display.
+4. Bugfix: Focus lost after adding item. Now focuses on the new item.
 
-数据库全面重新设计：
-Track | Project | TodoItem | IdeaItem | NowSession | Takeaway
+## [v0.0.5 (a)] - 2026-01-01 TUI Renderer Overhaul
 
-新功能架构设计：
-1. Box 收集箱
-2. ...
+**Optimization / Bugfix**
+1. Fix display issue: Content exceeds vertical range in views.
+    - Implemented "Implicit Scroll" (Auto-shift) instead of scrollbars.
+    - Supported in all Structure levels.
+    - Tracks with Projects: Prioritize showing current Track box.
+2. Refactor Renderer Structure
+    - `tui/renderer/` directory. Separated Renderer and LayoutManager.
+    - `renderer/blocks.py`: Generate lines by blocks.
+    - `renderer/constants.py`: Centralized layout constants.
 
-NOW 行动器澄清：计时的时候不保存至数据库，而是保存在 TUI 状态中，对于 CLI，当前不设计计时功能。在停止后，用户确认之后（通常同时记录 Takeaways），才保存至数据库。
-
-待实现功能：
-1. 当前版本 CLI 仅实现进入 TUI 和 help 两个命令
-2. 排序功能
-
-v0.0.3a Code Hierarchy / Data Flow
+**Code Hierarchy / Data Flow (v0.0.5a)**
 
 ```
 cli.py
     -> tui/app.run()
         -> tui/states/app_state.AppState()
-            -> tui/renderer.Renderer(tui_state)
+            -> tui/states/now_state.NowState()
+            -> tui/states/structure_state.StructureState()
+            -> tui/states/info_state.InfoState()
+            -> tui/states/timeline_state.TimelineState()
+            -> tui/states/archive_state.ArchiveState()
+            -> tui/states/box_state.BoxState()
+            -> tui/states/message_holder.MessageHolder()
+        -> tui/renderer/LayoutManager.build_layout()
+            -> tui/renderer/Renderer.render_xxx_view_content()
+                -> tui/renderer/blocks: build blocks -> lines + selection
+                -> renderer viewport: apply implicit scroll
         -> tui/app.key_bindings
             -> actions: excute action
                 -> models: return model objects
 ```
 
-### v0.0.3 (b) 重大更新: TUI 重构，新增 Info 视图
+## [v0.0.4 (e)] - 2025-12-31 Box Inbox
 
-1. 重构 TUI 状态管理
-    1. TUI 状态管理分为 View 和 UIModeState 两个部分
-    2. 在 AppState 中综合管理 View 和 UIModeState 状态
-    3. 不同的 View 使用不同的 State 类管理状态，目前有 NowState、StructureState、InfoState 三个状态类，分别管理自身 View 的状态
-    4. 重构消息关系，使用 MessageHolder 类管理消息，所有 State 类都可以访问 MessageHolder 类
-    5. 以优雅的原则重构了 AppState, NowState, StructureState, InfoState 类的实现
-2. 重构 TUI 渲染器
-    Renderer 实现原则：
-    1. 只负责渲染，不负责业务逻辑
-    2. 只与 State 类交互，不直接操作数据库，不与 actions.py 交互
-3. 新增 View Info 视图，用于查看当前 Item 的详细信息
+1. New BOX View (`b` to enter/exit), sub-views Box Todos / Box Ideas (`[` / `]`).
+2. Support Add/Edit/Archive/Delete/Info in BOX.
+3. Box Todo Move (Select target in Structure -> Enter).
+4. Box Idea Promote (Select target in Structure -> Enter; Prevent re-promote).
+5. Archive supports Archived Box Todos.
 
-```
-├── states/
-│   ├── app_state.py
-│   ├── info_state.py
-│   ├── message_holder.py
-│   ├── now_state.py
-│   └── structure_state.py
-```
-
-### v0.0.3 (c) 2025-12-27 重大更新: 完善 TUI 架构，实现 Renderer 与 State 完全分离
-
-1. 完善 State 类数据缓存，为 Renderer 提供可直接读取的数据，无需再调用 actions
-2. 重构 app.py 布局设计
-    1. 从 10 个 ConditionalContainer 优化为 4 个
-    2. 每个 View 一个完整的 Container（NOW / STRUCTURE / INFO）为每个 View 提供独立的渲染方法
-    3. Separator 和 Status Bar 改为全局共享，全宽显示
-    4. 添加布局常量，集中管理参数
-3. 完全移除 Renderer 对 actions 的依赖，所有数据从 State 读取（`now_state.current_project_dict` / `structure_state.current_tracks_list` 等）
-
-架构优势：
-- 数据流向单一：State → Renderer（Renderer 不再有副作用）
-- 职责分离清晰：State 管理数据，Renderer 负责渲染
-- 可维护性提升：布局结构一目了然，易于扩展
-
-4. 完善 README.md 文档
-
-
-### v0.0.4 (a) 状态切换以及排序功能、Archive 功能 2025-12-29
-
-1. 实现 Item 的各状态切换功能（Sleep, Cancel, Archive, ...）✅
-2. 实现 Structure View 根据 Item 状态排序功能并用不同样式显示✅
-    - Track: Active > Sleeping
-    - Project: Focusing > Active > Sleeping > Finished > Cancelled
-    - Todo: Active > Sleeping > Done > Cancelled
-3. 实现 Archive 面板（View）✅
-
-### v0.0.4 (b) 2025-12-30 实现 Timeline View
-
-1. 新增 Timeline View，用于查看所有 NOW Session 的时间线记录✅
-    - 显示所有历史 Session 记录，按时间倒序排列
-    - 显示 Session 的基本信息：项目名称、开始时间、持续时间、收获（Takeaways）等
-    - 支持按项目、日期等维度筛选和排序
-2. 重构 INFO View 并优化其显示逻辑
-    - 完善 Session， Takeaway 详细信息的展示，包括状态、描述、关键日期等
-    - 改进输入框布局以支持多行编辑
-
-
-
-### v0.0.4 (c) 2025-12-30 重大更新: 重构 Input Mode
-
-1. 重构 Input Mode 为「两行表单 + 真·就地编辑」✅
-    - 新增 InputState 类管理 Input Mode 状态
-    - 新增两行 Input 面板（分割线与状态栏保持不变），光标直接在字段处编辑
-    - `Tab/Shift+Tab` 切字段，`Space/+/-/↑↓` 调整枚举/数值字段，`Enter` 提交，`Esc/Ctrl+G` 取消
-2. Input Mode 支持多类型、多字段编辑（v1：单行、溢出不处理）✅
-    - Track: Name, Description, Status
-    - Project: Name, Description, Deadline, Status, Willingness/Importance/Urgency
-    - Todo: Name, Description, Deadline, Status
-    - Idea: Name, Description, Status, Maturity/Willingness
-    - Takeaway: Title, Content, Type, Date
-
-v0.0.4 (d) 2026-12-31 重构 TUI，新增 TUI Layout Manager
-
-TUI Data Flow: (New)
-
-```mermaid
-flowchart TD
-  appPy[app.py] -->|key_binding_updates_state| appState[AppState]
-  appPy -->|build_layout| layoutMgr[LayoutManager]
-  layoutMgr -->|uses_renderer_callbacks| renderer[Renderer]
-  renderer -->|reads_cached_state| appState
-  appPy -->|style_from_renderer| renderer
-  appState -->|calls| actions[actions.py]
-```
-
-### v0.0.4 (e) 2026-12-31 Box 收集箱 ✅
-
-1. 新增 BOX 视图（`b` 进入/退出），包含 Box Todos / Box Ideas 两个子视图（`[` / `]` 切换）✅
-2. BOX 内支持新增/编辑/归档/删除/详情查看 ✅
-3. 实现 Box Todo move（到 Structure 选择目标后 `Enter` 确认）✅
-4. 实现 Box Idea promote（到 Structure 选择目标后 `Enter` 确认；已 promoted 的 idea 禁止再次 promote）✅
-5. Archive 补齐 Archived Box Todos，并支持解档后跳回 BOX ✅
-
-
-当前目录结构：
+**Directory Structure:**
 ```
 ├── mukitodo/
 │   ├── __init__.py         # Package init
@@ -212,118 +131,124 @@ flowchart TD
 │       │   └── message_holder.py   # Message/Result manager
 ```
 
-至此，所有主要功能均已实现，包括：
-1. NOW 行动器
-2. STRUCTURE 结构
-3. BOX 收集箱
-4. ARCHIVE 归档视图
-5. TIMELINE 时间线视图
-6. INFO 信息视图
-以及各模式间的交互
+## [v0.0.4 (d)] - 2025-12-31 TUI Refactor, Layout Manager
 
-未来将进行适度的重构优化，以及大规模的体验优化
+**TUI Data Flow (New):**
 
-### v0.0.5 (a) 2026-01-01 TUI Renderer 大重构
+```mermaid
+flowchart TD
+  appPy[app.py] -->|key_binding_updates_state| appState[AppState]
+  appPy -->|build_layout| layoutMgr[LayoutManager]
+  layoutMgr -->|uses_renderer_callbacks| renderer[Renderer]
+  renderer -->|reads_cached_state| appState
+  appPy -->|style_from_renderer| renderer
+  appState -->|calls| actions[actions.py]
+```
 
-体验优化 / Bugfix
-1. 修复显示问题：Timeline/Structure/Box/Archive/Info View 中，item 过多时超出纵向显示范围
-    - 不使用滚动条，改为“自动位移 / 隐式滚动”：光标移动时保证当前选中项始终可见
-    - Structure 全层级支持（含 TRACKS_WITH_PROJECTS_T / TRACKS_WITH_PROJECTS_P）
-    - TRACKS_WITH_PROJECTS_T：优先完整显示当前 Track 框；若框过高放不下，仍尽可能多显示内容且标题行永远可见；与 P 层级切换尽量不跳动
-2. 重构渲染层结构
-    - 新增 `tui/renderer/` 目录，将 Renderer 与 LayoutManager 收敛为独立模块
-    - 新增 `renderer/blocks.py`：以 block 为最小单位生成 lines，并由 state 的 selected_idx/level 推导 selection（不再“拼完再拆”）
-    - 新增 `renderer/constants.py`：集中管理布局常量，可配置
+## [v0.0.4 (c)] - 2025-12-30 Major Update: Refactor Input Mode
 
-当前（v0.0.5a）Code Hierarchy / Data Flow
+1. Refactor Input Mode to "Two-line Form + Inline Edit".
+    - `InputState` class.
+    - Tab/Shift+Tab to switch fields, Space/Arrows to adjust.
+2. Support Multi-type/Multi-field editing.
+    - Track, Project, Todo, Idea, Takeaway fields supported.
 
+## [v0.0.4 (b)] - 2025-12-30 Timeline View
+
+1. New Timeline View for session history.
+    - Reverse chronological order.
+    - Session info (Project, time, duration).
+2. Refactor INFO View.
+
+## [v0.0.4 (a)] - 2025-12-29 Status Switching, Sorting, Archive
+
+1. Item status switching (Sleep, Cancel, Archive).
+2. Structure View sorting by status (Active > Sleeping > ...).
+3. Archive View.
+
+## [v0.0.3 (c)] - 2025-12-27 Major Update: TUI Architecture Perfection
+
+1. Perfect State caching for Renderer.
+2. Refactor `app.py` layout design (4 Containers).
+3. Remove Renderer dependency on Actions.
+4. Improve README.
+
+**Architecture Benefits:**
+- Unidirectional Data Flow: State → Renderer
+- Separation of Concerns: State manages data, Renderer handles display
+- Maintainability: Clear layout structure
+
+## [v0.0.3 (b)] - Major Update: TUI Refactor, Info View
+
+1. Refactor TUI State Management (View vs UIModeState).
+2. Refactor TUI Renderer (Pure rendering).
+3. New Info View.
+
+```
+├── states/
+│   ├── app_state.py
+│   ├── info_state.py
+│   ├── message_holder.py
+│   ├── now_state.py
+│   └── structure_state.py
+```
+
+## [v0.0.3 (a)] - Major Update: Functional/Architecture/Database Overhaul
+
+**Refactor:**
+1. TUI only handles interaction; logic in `actions.py`.
+2. Remove Action -> Service -> Model, use direct DB operations.
+3. CLI support preparation.
+
+**Actions Design:**
+1. Named by user intent.
+2. Return basic types (dicts), not Models.
+3. Context manager for DB.
+
+**Database Redesign:**
+Track, Project, TodoItem, IdeaItem, NowSession.
+
+**Now Actioner Clarification:**
+Timing state in TUI, save to DB only on finish.
+
+**v0.0.3a Code Hierarchy / Data Flow:**
 ```
 cli.py
     -> tui/app.run()
         -> tui/states/app_state.AppState()
-            -> tui/states/now_state.NowState()
-            -> tui/states/structure_state.StructureState()
-            -> tui/states/info_state.InfoState()
-            -> tui/states/timeline_state.TimelineState()
-            -> tui/states/archive_state.ArchiveState()
-            -> tui/states/box_state.BoxState()
-            -> tui/states/message_holder.MessageHolder()
-        -> tui/renderer/LayoutManager.build_layout()
-            -> tui/renderer/Renderer.render_xxx_view_content()
-                -> tui/renderer/blocks: build blocks -> lines + selection
-                -> renderer viewport: apply implicit scroll
+            -> tui/renderer.Renderer(tui_state)
         -> tui/app.key_bindings
             -> actions: excute action
                 -> models: return model objects
 ```
 
-### v0.0.6 2026-01-01 细节优化，第一个完整功能可用版本
+## [v0.0.2] - 2025-12-10 Major Update: Architecture / NOW Actioner
 
-1. 优化快捷键设计
-2. 优化视图切换逻辑
-3. 优化Input字段编辑显示
-4. 修复 bug：add item 之后，focus 丢失。focus 需要在新增的项目上
+1. Redesign functions and write README.
+2. Implement NOW Actioner.
+3. Refactor TUI code (AppState, Renderer, Layouts).
 
-### v0.0.7 2026-01-02 TODO 新增数量/阶段功能
+**v0.0.2 Code Hierarchy / Data Flow:**
+```
+cli.py
+    -> tui/app.run()
+        -> tui/state.AppState()
+            -> tui/renderer.Renderer(tui_state)
+        -> tui/app.key_bindings
+            -> actions: excute action
+                -> services: request database operations
+                -> models: return model objects
+```
 
-我发现一个新需求
-就是有时候一个 todo 有多个阶段，或者要重复多次，比如做 LeetCode 题目，可能我的一个 Todo 是做 10 道题目
+## [v0.01] - 2025-12-6 MVP
 
-所以增加一个 total_stages 和 current_stage 字段，来记录当前进度
+First minimal viable version of MukiTodo (ToFlow).
+Goal: Project-centric management system.
 
-在按 Space 的时候，就增加阶段数，直到 total_stages 再标记为完成
-
-实现细节（v1）：
-- Space（STRUCTURE -> TODOS）：
-  - status=active：current_stage +1，达到 total_stages 时自动标记 done，并把 current_stage 设为 total_stages
-  - status=done：撤销 done，status->active，并把 current_stage 设为 total_stages-1
-  - status=sleeping/cancelled：仅恢复到 active（不推进阶段）
-- Input Mode（Todo 新增/编辑）：
-  - 增加两个 chip：T（total_stages）、S（current_stage），用 ↑/↓（以及 +/-）调整
-  - 手动最多只能把 current_stage 调到 total_stages-1
-  - 当 status=done 时 current_stage 不可调整；修改 total_stages 会保持“满进度”
-- UI 显示：
-  - STRUCTURE / BOX / NOW / ARCHIVE 的 Todo 行都会显示进度：[current/total]
-- 数据库：
-  - 不做迁移也不提示；旧库请自行删除 `~/.mukitodo/todo.db` 以重建
-
-### v0.0.8 2026-01-02  NOW 完成提醒及休息功能
-
-- 计时剩余 5 分钟时，响铃提醒
-- 计时结束时
-    - 响铃提醒
-    - 激活至最前台 iTerm2（macOS 下）
-    - 自动进入 Finish Session 流程，询问 takeaway 并保存
-    - 若用户取消 Finish Session，则重置计时
-    - 若用户保存 Session，则进入 5 分钟休息模式，按 Space 开始休息
-    - 休息结束时，响铃提醒，并重置计时
-
-
-### v0.0.9 2026-01-04 重大更新
-
-计划：
-1. 时间显示优化：显示当地时间；✅
-    - Timeline：按本地日期分组；Session 时间显示为本地时间（HH:MM）
-    - Info：所有 datetime 字段显示为本地时间
-    - 数据仍以 UTC 存储；模型层统一将 SQLite 读出的 naive datetime 视为 UTC 并补齐 tzinfo
-2. 增加 structure(track/project/todo) 和 box(todo/idea) 的顺序调整功能（alt+up/down arrow，order_index）✅
-3. （重大更新）取消 takeaway 及其所有相关功能。session结束时改为记录 session description 并保存✅
-4. 调整：增加 pinned 字段，取消 project 的 focusing status.✅
-
-
-### v0.1.0 2026-01-15 修复细节bug，优化体验，上线 github，改名为 ToFlow
-
-
-
-
-
-
-### Future TODO:
-
-
-1. URL 解析和跳转
-2. 记录 Done List
-3. NOW 行动器增加任务推荐功能 
-4. NOW 行动器增加 Pin Item 功能
-5. Model 中的local time字段去除，所有时间都使用 UTC 时间
-5. 中文输入法操作优化
+**Contents:**
+1. Initial Project Structure.
+2. Track -> Project -> Item hierarchy.
+3. TUI -> Actions -> Services -> Models -> Database architecture.
+4. Normal Mode / Command Mode.
+5. SQLite storage.
+6. CRUD for Track/Project/Item.

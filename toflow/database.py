@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
-DB_PATH = Path.home() / ".mukitodo" / "todo.db"
+DB_PATH = Path.home() / ".toflow" / "toflow.db"
 
 _db_initialized = False
 
@@ -28,7 +28,7 @@ def init_db():
     global _db_initialized
     if _db_initialized:
         return
-    from mukitodo.models import Track, Project, TodoItem, IdeaItem, NowSession
+    from toflow.models import Track, Project, TodoItem, IdeaItem, NowSession
     engine = get_engine()
     Base.metadata.create_all(engine)
 

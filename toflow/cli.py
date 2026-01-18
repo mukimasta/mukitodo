@@ -11,24 +11,24 @@ def main(
 ):
     if ctx.invoked_subcommand is None:
         if not no_view:
-            from mukitodo.tui import run
+            from toflow.tui import run
             run()
 
 
 @app.command()
 def view():
-    from mukitodo.tui import run
+    from toflow.tui import run
     run()
 
 
 @app.command(name="help")
 def help_cmd():
-    print("MukiTodo - Terminal Todo App")
+    print("ToFlow - Terminal Todo App")
     print()
     print("Usage:")
-    print("  todo          Open TUI")
-    print("  todo view     Open TUI")
-    print("  todo help     Show this help")
+    print("  toflow        Open TUI")
+    print("  toflow view   Open TUI")
+    print("  toflow help   Show this help")
     print()
     print("TUI Commands (COMMAND MODE):")
     print("  select <name> / enter <name>  Enter track/project")

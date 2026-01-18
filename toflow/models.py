@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from sqlalchemy import String, ForeignKey, DateTime, Boolean, Integer, Text, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column
-from mukitodo.database import Base
+from toflow.database import Base
 
 
 class Track(Base):
