@@ -26,7 +26,7 @@
 | **[📖 Philosophy](./docs/PHILOSOPHY.md)** | Why do we need another Todo App? Deep dive into ToFlow's design philosophy. |
 | **[🕹️ User Manual](./docs/MANUAL.md)** | Full cheat sheet for shortcuts, navigation maps, and core workflows. |
 | **[🛠️ Developer Guide](./docs/DEVELOPER.md)** | System architecture, data models, and contribution guide. |
-| **[📝 Changelog](./CHANGELOG.md)** | 10+ version iterations, including 3 major architecture refactors. |
+| **[📝 Changelog](./docs/CHANGELOG.md)** | 10+ version iterations, including 3 major architecture refactors. |
 
 ---
 
@@ -64,7 +64,7 @@ ToFlow is built with Python. We recommend using `uv` for building and running.
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/mukii/toflow.git
+git clone https://github.com/mukimasta/toflow.git
 cd toflow
 
 # 2. Install dependencies

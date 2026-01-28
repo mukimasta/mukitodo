@@ -27,7 +27,7 @@
 | **[📖 理念篇](./docs/PHILOSOPHY_zh.md)** | 为什么需要另一个 Todo App？深入了解 ToFlow 背后的设计哲学。 |
 | **[🕹️ 用户手册](./docs/MANUAL_zh.md)** | 完整的快捷键列表、界面导航与核心工作流指南。 |
 | **[🛠️ 开发者文档](./docs/DEVELOPER_zh.md)** | 系统架构、数据模型设计与贡献指南。 |
-| **[📝 更新日志](./CHANGELOG.md)** | 10+ 版本迭代，包含 3 次重大架构重构。 |
+| **[📝 更新日志](./docs/CHANGELOG.md)** | 10+ 版本迭代，包含 3 次重大架构重构。 |
 
 ---
 
@@ -119,7 +119,7 @@ ToFlow 基于 Python 开发，推荐使用 `uv` 进行构建和运行。
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/mukii/toflow.git
+git clone https://github.com/mukimasta/toflow.git
 cd toflow
 
 # 2. 安装依赖
