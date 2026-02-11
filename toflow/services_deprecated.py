@@ -431,7 +431,7 @@ class IdeaItemService:
         self.session.commit()
         return True
     
-    # == 更新方法 ==
+    # == Update methods ==
     
     def update_name(self, idea_id: int, new_name: str) -> bool:
         """Update idea item name. Returns False if not found."""

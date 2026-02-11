@@ -318,7 +318,7 @@ def move_track_order(track_id: int, direction: int) -> Result:
         _normalize_order_index(tracks)
         ok, reason = _swap_order_index_in_list(items=tracks, item_id=track_id, direction=direction)
         if not ok:
-            return Result(False, None, "已到边界/不能移动" if reason == "Already at boundary" else reason)
+            return Result(False, None, "Already at boundary/cannot move" if reason == "Already at boundary" else reason)
 
         return Result(True, None, f"Track '{track.name}' moved")
 
@@ -673,7 +673,7 @@ def move_project_order(project_id: int, direction: int) -> Result:
         _normalize_order_index(projects)
         ok, reason = _swap_order_index_in_list(items=projects, item_id=project_id, direction=direction)
         if not ok:
-            return Result(False, None, "已到边界/不能移动" if reason == "Already at boundary" else reason)
+            return Result(False, None, "Already at boundary/cannot move" if reason == "Already at boundary" else reason)
 
         return Result(True, None, f"Project '{project.name}' moved")
 
@@ -1255,7 +1255,7 @@ def move_todo_order(todo_item_id: int, direction: int) -> Result:
         _normalize_order_index(todos)
         ok, reason = _swap_order_index_in_list(items=todos, item_id=todo_item_id, direction=direction)
         if not ok:
-            return Result(False, None, "已到边界/不能移动" if reason == "Already at boundary" else reason)
+            return Result(False, None, "Already at boundary/cannot move" if reason == "Already at boundary" else reason)
 
         return Result(True, None, f"Todo '{todo.name}' moved")
 
@@ -1491,7 +1491,7 @@ def move_idea_order(idea_item_id: int, direction: int) -> Result:
         _normalize_order_index(ideas)
         ok, reason = _swap_order_index_in_list(items=ideas, item_id=idea_item_id, direction=direction)
         if not ok:
-            return Result(False, None, "已到边界/不能移动" if reason == "Already at boundary" else reason)
+            return Result(False, None, "Already at boundary/cannot move" if reason == "Already at boundary" else reason)
 
         return Result(True, None, f"Idea '{idea.name}' moved")
 

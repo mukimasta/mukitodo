@@ -214,6 +214,7 @@ def run():
         state.structure_state.toggle_selected_item()
 
     @kb.add("s", filter=is_normal_mode & is_structure_view)
+    @kb.add("z", filter=is_normal_mode & is_structure_view)
     def _(event):
         state.structure_state.sleep_selected_item()
 

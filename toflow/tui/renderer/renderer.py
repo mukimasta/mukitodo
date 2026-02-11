@@ -571,10 +571,16 @@ class Renderer:
         Build a single structure line with right-aligned hints/deadline.
         Returns formatted-text segments (including trailing newline).
         """
-        base_style = self._get_item_style(item, item_type, is_selected)
+        is_pinned = item_type in ("project", "todo") and bool(item.get("pinned"))
+        
+        # Apply bold yellow style for pinned items
+        if is_pinned and not is_selected:
+            base_style = "bold ansiyellow"
+        else:
+            base_style = self._get_item_style(item, item_type, is_selected)
 
         status = item.get("status", "active")
-        if item_type in ("project", "todo") and bool(item.get("pinned")):
+        if is_pinned:
             icon = "✜"
         else:
             icon = self._STATUS_ICON_MAP.get(status, "○")
