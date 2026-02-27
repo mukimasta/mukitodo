@@ -15,7 +15,9 @@
 
 ---
 
-<img src="./docs/assets/demo.gif" alt="ToFlow Demo" width="80%">
+<img src="./docs/assets/fig1_12.png" alt="ToFlow Demo" width="80%">
+
+<img src="./docs/assets/fig2_abcd.png" alt="ToFlow Demo" width="80%">
 
 </div>
 
