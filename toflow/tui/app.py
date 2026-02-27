@@ -1,89 +1,128 @@
+"""TUI Application — entry point, key bindings, prompt-toolkit wiring."""
+
 import asyncio
-import subprocess
-import sys
+
 from prompt_toolkit import Application
-from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.filters import Condition
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.layout import (
+    ConditionalContainer,
+    HSplit,
+    Layout,
+    Window,
+)
+from prompt_toolkit.layout.controls import FormattedTextControl
 
-from toflow.actions import Result
-from toflow.tui.states.box_state import BoxSubview
-
-from .states.app_state import AppState, UIMode, View, ConfirmAction
-from .states.now_state import TimerStateEnum, TimerEventEnum
-from .states.input_state import InputPurpose
-from .renderer import Renderer, LayoutManager
-
-
-def _activate_iterm2_macos() -> None:
-    """
-    Best-effort bring iTerm2 to the foreground on macOS.
-
-    Spec requires only bringing the app to front (no specific window/tab).
-    We try both application names: "iTerm" and "iTerm2".
-    """
-    scripts = [
-        'tell application "iTerm" to activate',
-        'tell application "iTerm2" to activate',
-    ]
-    for script in scripts:
-        try:
-            subprocess.run(
-                ["osascript", "-e", script],
-                check=False,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            break
-        except Exception:
-            continue
+from toflow.tui.display import (
+    APP_STYLE,
+    apply_zen_layout,
+    clip_to_viewport,
+    flatten,
+    render_input_form_lines,
+    render_status,
+    render_title,
+    truncate_lines,
+)
+from toflow.ops.result import Result
+from toflow.tui.input.intent import InputIntent
+from toflow.tui.input.service import FormService
+from toflow.tui.now.runtime import run_timer_runtime
+from toflow.tui.state import AppState, UIMode
+from toflow.tui.view.archive import ArchiveView
+from toflow.tui.view.box import BoxProjectsView, BoxTodosView
+from toflow.tui.view.picker import PickerView
+from toflow.tui.view.timeline import TimelineView
 
 
-def _bell(app: Application) -> None:
-    """Best-effort terminal bell (no external deps)."""
-    try:
-        app.output.bell()
-        return
-    except Exception:
-        pass
-    try:
-        sys.stdout.write("\a")
-        sys.stdout.flush()
-    except Exception:
-        return
-
-
-def run():
+def run() -> None:
     state = AppState()
-    renderer = Renderer(state)
-    layout_manager = LayoutManager(state=state, renderer=renderer)
+    form_service = FormService()
 
-    # ========================================
-    # Key Bindings
-    # ========================================
+    # -- Conditions --
+
+    is_normal = Condition(lambda: state.ui_mode == UIMode.NORMAL)
+    is_confirm = Condition(lambda: state.ui_mode == UIMode.CONFIRM)
+    is_input = Condition(lambda: state.ui_mode == UIMode.INPUT and state.has_form)
+    is_now_active = Condition(state.is_now_active)
+    def _is_zen_layout() -> bool:
+        return getattr(state.current_view.pane, "layout_mode", "default") == "zen"
+
+    is_zen_layout = Condition(_is_zen_layout)
+
+    def _now_note_input() -> bool:
+        if not state.is_now_active():
+            return False
+        return state.now.is_note_input()
+
+    is_now_note_input = Condition(_now_note_input)
+
+    # -- Content --
+
+    def get_title_content() -> list[tuple[str, str]]:
+        return render_title(state)
+
+    def get_main_content() -> list[tuple[str, str]]:
+        try:
+            from prompt_toolkit.application.current import get_app
+            app = get_app()
+            rows = app.output.get_size().rows
+            cols = app.output.get_size().columns
+        except Exception:
+            rows, cols = 24, 80
+
+        reserved = 2 if _is_zen_layout() else 3  # separator + status (+ title if not zen)
+        if state.ui_mode == UIMode.INPUT and state.has_form:
+            form = state.form
+            if form:
+                # header + text field lines + chip line (if any)
+                text_count = sum(1 for s in form.fields if s.widget not in ("chip", "select"))
+                chip_count = sum(1 for s in form.fields if s.widget in ("chip", "select"))
+                reserved += 1 + text_count + (1 if chip_count else 0)
+        vh = max(1, rows - reserved)
+
+        pane = state.current_view.pane
+        lines = pane.render()
+        if getattr(pane, "layout_mode", "default") == "zen":
+            if state.current_view.title:
+                lines = [[("", state.current_view.title)], [("", "")], *lines]
+            lines = truncate_lines(lines, cols)
+            lines = apply_zen_layout(lines, cols, vh)
+            return flatten(lines)
+
+        lines = truncate_lines(lines, cols)
+        sel_line = pane.selected_line_index()
+        block_range = getattr(pane, "selected_block_range", lambda: None)()
+        lines, pane.viewport_start = clip_to_viewport(
+            lines, vh, sel_line, pane.viewport_start, block_range=block_range
+        )
+        return flatten(lines)
+
+    def get_status_content() -> list[tuple[str, str]]:
+        if state.ui_mode == UIMode.INPUT:
+            return [("class:dim", "  [Tab] next  [Space/←/→] segment  [=/-] adjust  [digits] direct input  [Backspace] clear-segment  [Enter] ok  [Esc] cancel")]
+        return render_status(
+            is_confirm=state.ui_mode == UIMode.CONFIRM,
+            last_result=state.last_result,
+            status_hint=state.current_view.status_hint,
+        )
+
+    def get_form_content() -> list[tuple[str, str]]:
+        session = state.input_session
+        if session is None:
+            return []
+        lines = render_input_form_lines(
+            session.form,
+            mode_label=session.mode_label,
+            entity_label=session.entity_type.value.title(),
+        )
+        return flatten(lines)
+
+    # -- Key bindings --
+
     kb = KeyBindings()
 
-    is_normal_mode = Condition(lambda: state.ui_mode == UIMode.NORMAL)
-    is_command_mode = Condition(lambda: state.ui_mode == UIMode.COMMAND)
-    is_input_mode = Condition(lambda: state.ui_mode == UIMode.INPUT)
-    is_confirm_mode = Condition(lambda: state.ui_mode == UIMode.CONFIRM)
-
-    is_now_view = Condition(lambda: state.view == View.NOW)
-    is_structure_view = Condition(lambda: state.view == View.STRUCTURE)
-    is_info_view = Condition(lambda: state.view == View.INFO)
-    is_archive_view = Condition(lambda: state.view == View.ARCHIVE)
-    is_timeline_view = Condition(lambda: state.view == View.TIMELINE)
-    is_box_view = Condition(lambda: state.view == View.BOX)
-
-    is_input_text_field = Condition(lambda: state.ui_mode == UIMode.INPUT and state.input_state.is_text_input_field())
-    is_input_non_text_field = Condition(lambda: state.ui_mode == UIMode.INPUT and (not state.input_state.is_text_input_field()))
-
     def _safe_add(*primary_keys: str, fallback_keys: tuple[str, ...] | None = None, filter=None):
-        """
-        Register key bindings with a fallback for older prompt-toolkit key names.
-
-        Many terminals send Alt+Arrow as an ESC-prefixed sequence, so we fallback
-        to ("escape","up/down") when "m-up"/"m-down" isn't supported.
-        """
+        """Try primary keys (e.g. m-up); fallback to escape-prefixed if unsupported."""
         try:
             return kb.add(*primary_keys, filter=filter)
         except ValueError:
@@ -91,515 +130,354 @@ def run():
                 raise
             return kb.add(*fallback_keys, filter=filter)
 
-
-    # == General Key Bindings ==
-
     @kb.add("c-c")
     @kb.add("c-d")
-    def _(event):
+    def _force_quit(event):
         event.app.exit()
 
-    # == Normal Mode Key Bindings ==
+    # == Normal mode ==
 
-    @kb.add("q", filter=is_normal_mode & (is_now_view | is_structure_view))
-    def _(event):
-        state.ask_confirm(ConfirmAction.QUIT)
-
-    @kb.add("q", filter=is_normal_mode & (is_timeline_view | is_box_view | is_archive_view | is_info_view))
-    def _(event):
-        state.exit_current_view()
-
-    @kb.add("tab", filter=is_normal_mode & ~is_info_view)
-    def _(event):
-        if state.view in (View.NOW, View.STRUCTURE):
-            state.switch_view()
-        else:
-            state.return_to_last_primary_view()
-
-    @kb.add("[", filter=is_normal_mode & ~is_info_view)
-    def _(event):
-        state.toggle_box_view(BoxSubview.TODOS)
-
-    @kb.add("]", filter=is_normal_mode & ~is_info_view)
-    def _(event):
-        state.toggle_box_view(BoxSubview.IDEAS)
-
-    @kb.add("`", filter=is_normal_mode & ~is_info_view)
-    def _(event):
-        if state.view == View.ARCHIVE:
-            state.exit_archive_view()
-        else:
-            state.enter_archive_view()
-
-    @kb.add("'", filter=is_normal_mode & ~is_info_view)
-    def _(event):
-        if state.view == View.TIMELINE:
-            state.exit_timeline_view()
-        else:
-            state.enter_timeline_view()
-
-
-    # @kb.add(":", filter=is_normal_mode)
-    # @kb.add(">", filter=is_normal_mode)
-    # def _(event):
-    #     state.change_mode(UIMode.COMMAND)
-
-
-    # TODO: Toggle Box: Shift
-
-
-    # Normal Mode & Structure View
-
-    @kb.add("up", filter=is_normal_mode & is_structure_view)
-    def _(event):
-        state.structure_state.move_cursor(-1)
-        if state.has_pending_transfer():
-            state.refresh_pending_transfer_hint()
-
-    @kb.add("down", filter=is_normal_mode & is_structure_view)
-    def _(event):
-        state.structure_state.move_cursor(1)
-        if state.has_pending_transfer():
-            state.refresh_pending_transfer_hint()
-
-    @_safe_add("m-up", fallback_keys=("escape", "up"), filter=is_normal_mode & is_structure_view)
-    def _(event):
-        state.structure_state.move_selected_item_order(-1)
-
-    @_safe_add("m-down", fallback_keys=("escape", "down"), filter=is_normal_mode & is_structure_view)
-    def _(event):
-        state.structure_state.move_selected_item_order(1)
-    @kb.add("right", filter=is_normal_mode & is_structure_view)
-    def _(event):
-        if state.has_pending_transfer():
-            state.handle_structure_right_for_transfer()
-            return
-        state.structure_state.select_current()
-    @kb.add("left", filter=is_normal_mode & is_structure_view)
-    def _(event):
-        state.structure_state.go_back()
-        if state.has_pending_transfer():
-            state.refresh_pending_transfer_hint()
-
-    @kb.add("i", filter=is_normal_mode & is_structure_view)
-    def _(event):
-        state.open_item_info()
-
-    @kb.add("=", filter=is_normal_mode & is_structure_view)
-    @kb.add("+", filter=is_normal_mode & is_structure_view)
-    def _(event):
-        state.start_input(InputPurpose.ADD)
-        if state.ui_mode == UIMode.INPUT:
-            layout_manager.sync_all_text_buffers_from_state()
-            layout_manager.focus_current_field(event.app.layout)
-
-    @kb.add("r", filter=is_normal_mode & is_structure_view)
-    def _(event):
-        state.start_input(InputPurpose.EDIT)
-        if state.ui_mode == UIMode.INPUT:
-            layout_manager.sync_all_text_buffers_from_state()
-            layout_manager.focus_current_field(event.app.layout)
-    
-    @kb.add("backspace", filter=is_normal_mode & is_structure_view)
-    def _(event):
-        state.ask_confirm(ConfirmAction.DELETE_STRUCTURE_ITEM)
-
-    @kb.add("space", filter=is_normal_mode & is_structure_view)
-    def _(event):
-        """
-        Toggle item status:
-        - TODOS level: Todo done ↔ active (or other → active)
-        - TRACKS_WITH_PROJECTS_P level: Project finished ↔ active (or other → active)
-        """
-        state.structure_state.toggle_selected_item()
-
-    @kb.add("s", filter=is_normal_mode & is_structure_view)
-    @kb.add("z", filter=is_normal_mode & is_structure_view)
-    def _(event):
-        state.structure_state.sleep_selected_item()
-
-    @kb.add("c", filter=is_normal_mode & is_structure_view)
-    def _(event):
-        state.structure_state.cancel_selected_item()
-
-    @kb.add("p", filter=is_normal_mode & is_structure_view)
-    def _(event):
-        state.structure_state.toggle_pin_selected_item()
-
-    @kb.add("a", filter=is_normal_mode & is_structure_view)
-    def _(event):
-        state.ask_confirm(ConfirmAction.ARCHIVE_STRUCTURE_ITEM)
-
-    @kb.add("m", filter=is_normal_mode & is_structure_view)
-    def _(event):
-        if state.has_pending_transfer():
-            return  # Already in move mode, ignore
-        state.start_pending_move_from_structure()
-
-    @kb.add("enter", filter=is_normal_mode & is_structure_view)
-    def _(event):
-        if state.has_pending_transfer():
-            # Determine which confirm action based on transfer kind
-            kind = state._pending_transfer.get("kind") if state._pending_transfer else ""
-            if kind in ("move_structure_project", "move_structure_todo"):
-                state.ask_confirm(ConfirmAction.CONFIRM_STRUCTURE_MOVE)
-            else:
-                state.ask_confirm(ConfirmAction.CONFIRM_BOX_TRANSFER)
-            return
-        state.ask_confirm(ConfirmAction.ENTER_NOW_WITH_STRUCTURE_ITEM)
-
-    @kb.add("escape", filter=is_normal_mode & is_structure_view)
-    def _(event):
-        if state.has_pending_transfer():
-            state.cancel_pending_transfer()
-            return
-
-    # Normal Mode & NOW View
-
-    @kb.add("space", filter=is_normal_mode & is_now_view)
-    def _(event):
-        state.now_state.toggle_timer()
-
-    @kb.add("r", filter=is_normal_mode & is_now_view)
-    def _(event):
-        state.now_state.reset_timer()
-    
-    @kb.add("+", filter=is_normal_mode & is_now_view)
-    @kb.add("=", filter=is_normal_mode & is_now_view)
-    def _(event):
-        state.now_state.adjust_time(5)
-    @kb.add("-", filter=is_normal_mode & is_now_view)
-    def _(event):
-        state.now_state.adjust_time(-5)
-
-    @kb.add("i", filter=is_normal_mode & is_now_view)
-    def _(event):
-        state.open_item_info()
-
-
-    @kb.add("enter", filter=is_normal_mode & is_now_view)
-    def _(event):
-        state.ask_confirm(ConfirmAction.FINISH_SESSION)
-
-    # Normal Mode & BOX View
-
-    @kb.add("up", filter=is_normal_mode & is_box_view)
-    def _(event):
-        state.box_state.move_cursor(-1)
-
-    @kb.add("down", filter=is_normal_mode & is_box_view)
-    def _(event):
-        state.box_state.move_cursor(1)
-
-    @_safe_add("m-up", fallback_keys=("escape", "up"), filter=is_normal_mode & is_box_view)
-    def _(event):
-        state.box_state.move_selected_item_order(-1)
-
-    @_safe_add("m-down", fallback_keys=("escape", "down"), filter=is_normal_mode & is_box_view)
-    def _(event):
-        state.box_state.move_selected_item_order(1)
-
-    @kb.add("i", filter=is_normal_mode & is_box_view)
-    def _(event):
-        state.open_item_info()
-
-    @kb.add("=", filter=is_normal_mode & is_box_view)
-    @kb.add("+", filter=is_normal_mode & is_box_view)
-    def _(event):
-        state.start_input(InputPurpose.ADD)
-        if state.ui_mode == UIMode.INPUT:
-            layout_manager.sync_all_text_buffers_from_state()
-            layout_manager.focus_current_field(event.app.layout)
-
-    @kb.add("r", filter=is_normal_mode & is_box_view)
-    def _(event):
-        state.start_input(InputPurpose.EDIT)
-        if state.ui_mode == UIMode.INPUT:
-            layout_manager.sync_all_text_buffers_from_state()
-            layout_manager.focus_current_field(event.app.layout)
-
-    @kb.add("backspace", filter=is_normal_mode & is_box_view)
-    def _(event):
-        state.ask_confirm(ConfirmAction.DELETE_BOX_ITEM)
-
-    @kb.add("a", filter=is_normal_mode & is_box_view)
-    def _(event):
-        state.ask_confirm(ConfirmAction.ARCHIVE_BOX_ITEM)
-
-    @kb.add("m", filter=is_normal_mode & is_box_view)
-    def _(event):
-        if state.box_state.subview == BoxSubview.TODOS:
-            state.start_pending_move_from_box()
-        else:
-            state.start_pending_promote_from_box()
-
-    @kb.add("escape", filter=is_normal_mode & is_box_view)
-    def _(event):
-        state.exit_box_view()
-
-    # INFO view specific key bindings
-    
-    @kb.add("i", filter=is_normal_mode & is_info_view)
-    @kb.add("escape", filter=is_normal_mode & is_info_view)
-    def _(event):
-        state.return_from_info()
-    
-    @kb.add("up", filter=is_normal_mode & is_info_view)
-    def _(event):
-        state.info_state.move_cursor(-1)
-    
-    @kb.add("down", filter=is_normal_mode & is_info_view)
-    def _(event):
-        state.info_state.move_cursor(1)
-
-    # ARCHIVE view specific key bindings
-
-    @kb.add("up", filter=is_normal_mode & is_archive_view)
-    def _(event):
-        state.archive_state.move_cursor(-1)
-
-    @kb.add("down", filter=is_normal_mode & is_archive_view)
-    def _(event):
-        state.archive_state.move_cursor(1)
-
-    @kb.add("a", filter=is_normal_mode & is_archive_view)
-    def _(event):
-        """Unarchive selected item."""
-        state.ask_confirm(ConfirmAction.UNARCHIVE_ITEM)
-
-    @kb.add("backspace", filter=is_normal_mode & is_archive_view)
-    def _(event):
-        """Delete selected item permanently."""
-        state.ask_confirm(ConfirmAction.DELETE_ARCHIVE_ITEM)
-
-    @kb.add("i", filter=is_normal_mode & is_archive_view)
-    def _(event):
-        """View info of selected archived item."""
-        state.open_item_info()
-
-    @kb.add("escape", filter=is_normal_mode & is_archive_view)
-    @kb.add("`", filter=is_normal_mode & is_archive_view)
-    def _(event):
-        """Exit Archive View (return to STRUCTURE)."""
-        state.exit_archive_view()
-
-    # TIMELINE view key bindings
-
-    @kb.add("escape", filter=is_normal_mode & is_timeline_view)
-    def _(event):
-        """Exit Timeline View."""
-        state.exit_timeline_view()
-
-    @kb.add("up", filter=is_normal_mode & is_timeline_view)
-    def _(event):
-        state.timeline_state.move_cursor(-1)
-
-    @kb.add("down", filter=is_normal_mode & is_timeline_view)
-    def _(event):
-        state.timeline_state.move_cursor(1)
-
-    @kb.add("i", filter=is_normal_mode & is_timeline_view)
-    def _(event):
-        """View details of selected session."""
-        state.open_item_info()
-
-    @kb.add("backspace", filter=is_normal_mode & is_timeline_view)
-    def _(event):
-        """Delete selected session."""
-        state.ask_confirm(ConfirmAction.DELETE_TIMELINE_ITEM)
-
-
-    # == Input Mode Key Bindings (README Form Input) ==
-
-    @kb.add("tab", filter=is_input_mode)
-    def _(event):
-        layout_manager.save_current_text_field_to_state()
-        state.input_state.move_to_next_field()
-        layout_manager.focus_current_field(event.app.layout)
-
-    @kb.add("s-tab", filter=is_input_mode)
-    def _(event):
-        layout_manager.save_current_text_field_to_state()
-        state.input_state.move_to_prev_field()
-        layout_manager.focus_current_field(event.app.layout)
-
-    @kb.add("escape", filter=is_input_mode)
-    @kb.add("c-g", filter=is_input_mode)
-    def _(event):
-        state.cancel_input()
-        layout_manager.reset_buffers()
-
-    @kb.add("enter", filter=is_input_mode)
-    def _(event):
-        layout_manager.save_current_text_field_to_state()
-        state.confirm_input()
-        if state.ui_mode == UIMode.INPUT:
-            layout_manager.sync_all_text_buffers_from_state()
-            layout_manager.focus_current_field(event.app.layout)
-        else:
-            layout_manager.reset_buffers()
-
-    @kb.add("space", filter=is_input_mode & is_input_non_text_field)
-    def _(event):
-        state.input_state.edit_field_value(direction=None, value=None)
-
-    @kb.add("+", filter=is_input_mode & is_input_non_text_field)
-    @kb.add("=", filter=is_input_mode & is_input_non_text_field)
-    def _(event):
-        state.input_state.edit_field_value(direction=1, value=None)
-
-    @kb.add("-", filter=is_input_mode & is_input_non_text_field)
-    def _(event):
-        state.input_state.edit_field_value(direction=-1, value=None)
-
-    @kb.add("up", filter=is_input_mode & is_input_non_text_field)
-    def _(event):
-        state.input_state.edit_field_value(direction=1, value=None)
-
-    @kb.add("down", filter=is_input_mode & is_input_non_text_field)
-    def _(event):
-        state.input_state.edit_field_value(direction=-1, value=None)
-
-    # In text fields, Up/Down should be no-op (v1 single-line; avoid accidental edits/scroll semantics).
-    @kb.add("up", filter=is_input_mode & is_input_text_field)
-    def _(event):
-        return
-
-    @kb.add("down", filter=is_input_mode & is_input_text_field)
-    def _(event):
-        return
-
-
-    # == Confirm Mode Key Bindings ==
-
-    def _confirm_finish_session(event) -> None:
-        """
-        Confirm handler for NOW finish-session flow.
-        Keep legacy behavior: if finishing a session enters INPUT mode, we immediately
-        sync buffers and focus the current field.
-        """
-        state.finish_session()
-        if state.ui_mode == UIMode.INPUT:
-            layout_manager.sync_all_text_buffers_from_state()
-            layout_manager.focus_current_field(event.app.layout)
-
-    _confirm_handlers = {
-        ConfirmAction.QUIT: lambda e: e.app.exit(),
-        ConfirmAction.DELETE_STRUCTURE_ITEM: lambda e: state.structure_state.delete_selected_item(),
-        ConfirmAction.ARCHIVE_STRUCTURE_ITEM: lambda e: state.structure_state.archive_selected_item(),
-        ConfirmAction.DELETE_BOX_ITEM: lambda e: state.box_state.delete_selected_item(),
-        ConfirmAction.ARCHIVE_BOX_ITEM: lambda e: state.box_state.archive_selected_item(),
-        ConfirmAction.ENTER_NOW_WITH_STRUCTURE_ITEM: lambda e: state.enter_now_with_structure_item(),
-        ConfirmAction.CONFIRM_BOX_TRANSFER: lambda e: state.confirm_pending_transfer_in_structure(),
-        ConfirmAction.CONFIRM_STRUCTURE_MOVE: lambda e: state.confirm_pending_transfer_in_structure(),
-        ConfirmAction.FINISH_SESSION: _confirm_finish_session,
-        ConfirmAction.UNARCHIVE_ITEM: lambda e: state.unarchive_item_and_maybe_jump(),
-        ConfirmAction.DELETE_ARCHIVE_ITEM: lambda e: state.archive_state.delete_selected_item(),
-        ConfirmAction.DELETE_TIMELINE_ITEM: lambda e: state.timeline_state.delete_selected_item(),
-    }
-
-    @kb.add("enter", filter=is_confirm_mode)
-    @kb.add("backspace", filter=is_confirm_mode)
-    @kb.add("up", filter=is_confirm_mode)
-    @kb.add("down", filter=is_confirm_mode)
-    @kb.add("left", filter=is_confirm_mode)
-    @kb.add("right", filter=is_confirm_mode)
-    @kb.add("<any>", filter=is_confirm_mode)
-    def _(event):
-        """
-        Single confirm dispatcher:
-        - Press the same key again to confirm.
-        - Any other key cancels.
-
-        View is intentionally ignored: we only use state.confirm_action.
-        """
-        confirm_action = state.confirm_action
-        if confirm_action is None:
-            state.exit_confirm()
-            return
-
-        def _normalize_confirm_key(key: str) -> str:
-            """
-            Normalize prompt-toolkit key strings for confirm matching.
-
-            Some terminals report Enter/Backspace as control sequences:
-            - Enter: "c-m"
-            - Backspace: "c-h"
-            We canonicalize these to match ConfirmAction.key values ("enter"/"backspace").
-            """
-            return {
-                "c-m": "enter",
-                "c-h": "backspace",
-            }.get(key, key)
-
-        # Guard: <any> may occasionally provide an empty key_sequence.
+    @kb.add("<any>", filter=is_normal & is_now_note_input, eager=True)
+    def _now_note_key_router(event):
         if not event.key_sequence:
-            state.exit_confirm()
             return
+        key = event.key_sequence[0].key
+        result = state.now.handle_note_key(key, event.data)
+        if result is not None:
+            state.last_result = result
 
-        pressed_key = _normalize_confirm_key(event.key_sequence[0].key)
-        expected_key = _normalize_confirm_key(confirm_action.key)
-        if pressed_key == expected_key:
-            handler = _confirm_handlers.get(confirm_action)
-            if handler is not None:
-                handler(event)
+    @kb.add("q", filter=is_normal)
+    def _quit(event):
+        state.request_confirm(lambda: (event.app.exit(), None)[-1], "q")
 
-        state.exit_confirm()
+    @kb.add("[", filter=is_normal)
+    def _open_box_todos(event):
+        state.toggle_secondary(BoxTodosView)
 
-    # == Command Mode Key Bindings ==
+    @kb.add("]", filter=is_normal)
+    def _open_box_projects(event):
+        state.toggle_secondary(BoxProjectsView)
 
-    # TODO: Command Mode Key Bindings
+    @kb.add("tab", filter=is_normal)
+    def _switch_primary(event):
+        state.switch_primary()
 
+    @kb.add("`", filter=is_normal)
+    def _open_archive(event):
+        state.toggle_secondary(ArchiveView)
 
-    layout = layout_manager.build_layout()
-    style = renderer.build_style()
+    @kb.add("'", filter=is_normal)
+    def _open_timeline(event):
+        state.toggle_secondary(TimelineView)
+
+    @kb.add("up", filter=is_normal)
+    def _up(event):
+        state.current_view.move(-1)
+
+    @kb.add("down", filter=is_normal)
+    def _down(event):
+        state.current_view.move(1)
+
+    @kb.add("right", filter=is_normal)
+    def _right(event):
+        state.current_view.go_deeper(state)
+
+    @kb.add("left", filter=is_normal)
+    def _left(event):
+        state.go_back()
+
+    @kb.add("space", filter=is_normal)
+    def _toggle(event):
+        result = state.current_view.space_action()
+        if result is not None:
+            state.last_result = result
+
+    @kb.add("backspace", filter=is_normal)
+    def _delete(event):
+        if state.is_now_active() and state.now.consume_note_backspace():
+            return
+        state.request_confirm(state.current_view.delete_selected, "backspace")
+
+    @kb.add("=", filter=is_normal & ~is_now_active)
+    @kb.add("+", filter=is_normal & ~is_now_active)
+    def _add(event):
+        if not state.current_view.can_add:
+            return
+        session = form_service.build_add_session(
+            state.current_view.add_entity_type(),
+            state.current_view.add_parent_id(),
+        )
+        if session is not None:
+            state.start_input(session)
+
+    @kb.add("r", filter=is_normal & ~is_now_active)
+    def _edit(event):
+        if not state.current_view.can_edit:
+            return
+        selected_id = state.current_view.selected_id()
+        if selected_id is None:
+            return
+        session = form_service.build_edit_session(
+            state.current_view.entity_type,
+            selected_id,
+        )
+        if session is not None:
+            state.start_input(session)
+
+    @kb.add("m", filter=is_normal)
+    def _move(event):
+        ctx = state.current_view.move_context()
+        if ctx is not None:
+            state.open_modal(PickerView(ctx))
+
+    @kb.add("enter", filter=is_normal)
+    def _confirm(event):
+        state.current_view.confirm_selection(state)
+
+    @kb.add("a", filter=is_normal)
+    def _archive(event):
+        action = state.current_view.archive_confirm_action()
+        if action is not None:
+            state.request_confirm(action, "a")
+
+    @kb.add("s", filter=is_normal)
+    @kb.add("z", filter=is_normal)
+    def _sleep(event):
+        result = state.current_view.sleep_selected()
+        if result is not None:
+            state.last_result = result
+
+    @kb.add("c", filter=is_normal)
+    def _cancel(event):
+        result = state.current_view.cancel_selected()
+        if result is not None:
+            state.last_result = result
+
+    @kb.add("p", filter=is_normal)
+    def _pin(event):
+        result = state.current_view.pin_selected()
+        if result is not None:
+            state.last_result = result
+
+    @_safe_add("m-up", fallback_keys=("escape", "up"), filter=is_normal)
+    def _reorder_up(event):
+        result = state.current_view.reorder_selected(-1)
+        if result is not None:
+            state.last_result = result
+
+    @_safe_add("m-down", fallback_keys=("escape", "down"), filter=is_normal)
+    def _reorder_down(event):
+        result = state.current_view.reorder_selected(1)
+        if result is not None:
+            state.last_result = result
+
+    @kb.add("t", filter=is_normal & is_now_active)
+    def _toggle_today_panel(event):
+        state.now.toggle_today_panel()
+
+    @kb.add("=", filter=is_normal & is_now_active)
+    @kb.add("+", filter=is_normal & is_now_active)
+    def _now_plus(event):
+        result = state.now.adjust_current(1)
+        if result is not None:
+            state.last_result = result
+
+    @kb.add("-", filter=is_normal & is_now_active)
+    def _now_minus(event):
+        result = state.now.adjust_current(-1)
+        if result is not None:
+            state.last_result = result
+
+    @kb.add("r", filter=is_normal & is_now_active)
+    def _now_r(event):
+        req = state.now.reset_confirm_request()
+        if req is not None:
+            state.request_confirm(req.action, req.trigger_key)
+
+    @kb.add("n", filter=is_normal & is_now_active)
+    def _now_note(event):
+        result = state.now.open_note()
+        if result is not None:
+            state.last_result = result
+
+    @kb.add("escape", filter=is_normal)
+    def _escape(event):
+        if state.is_now_active():
+            result = state.now.close_note_if_open()
+            if result is not None:
+                state.last_result = result
+                return
+        state.go_back()
+
+    # == Confirm mode ==
+
+    @kb.add("enter", filter=is_confirm)
+    @kb.add("backspace", filter=is_confirm)
+    @kb.add("q", filter=is_confirm)
+    @kb.add("<any>", filter=is_confirm)
+    def _confirm_key(event):
+        if not event.key_sequence:
+            state.handle_confirm_key("")
+            return
+        pressed = event.key_sequence[0].key
+        state.handle_confirm_key(pressed)
+
+    # == Input mode — form (multi-field, inline editing) ==
+
+    @kb.add("enter", filter=is_input)
+    def _form_submit(event):
+        session = state.take_input_session()
+        if session is None:
+            return
+        result = form_service.submit(session)
+        state.last_result = result
+        if result.success:
+            state.current_view.load_data()
+
+    @kb.add("escape", filter=is_input)
+    @kb.add("c-g", filter=is_input)
+    def _form_cancel(event):
+        state.cancel_input()
+
+    @kb.add("tab", filter=is_input)
+    @kb.add("down", filter=is_input)
+    def _form_next(event):
+        form = state.form
+        if form is not None:
+            form.handle_intent(InputIntent.FIELD_NEXT)
+
+    @kb.add("s-tab", filter=is_input)
+    @kb.add("up", filter=is_input)
+    def _form_prev(event):
+        form = state.form
+        if form is not None:
+            form.handle_intent(InputIntent.FIELD_PREV)
+
+    @kb.add("left", filter=is_input)
+    def _form_cursor_left(event):
+        form = state.form
+        if form is None:
+            return
+        form.handle_intent(InputIntent.SEG_PREV)
+
+    @kb.add("right", filter=is_input)
+    def _form_cursor_right(event):
+        form = state.form
+        if form is None:
+            return
+        form.handle_intent(InputIntent.SEG_NEXT)
+
+    @kb.add("backspace", filter=is_input)
+    def _form_backspace(event):
+        form = state.form
+        if form is None:
+            return
+        form.handle_intent(InputIntent.BACKSPACE)
+
+    @kb.add("space", filter=is_input)
+    def _form_space(event):
+        form = state.form
+        if form is None:
+            return
+        form.handle_intent(InputIntent.SPACE)
+
+    @kb.add("+", filter=is_input)
+    @kb.add("=", filter=is_input)
+    def _form_inc(event):
+        form = state.form
+        if form is None:
+            return
+        form.handle_intent(InputIntent.INC, event.data or "+")
+
+    @kb.add("-", filter=is_input)
+    def _form_dec(event):
+        form = state.form
+        if form is None:
+            return
+        form.handle_intent(InputIntent.DEC)
+
+    @kb.add("<any>", filter=is_input)
+    def _form_any_key(event):
+        form = state.form
+        if form is None:
+            return
+        char = event.data
+        if not char or len(char) != 1:
+            return
+        form.handle_intent(InputIntent.CHAR, char)
+
+    # -- Layout --
+
+    title_bar = Window(
+        content=FormattedTextControl(get_title_content, show_cursor=False),
+        height=1,
+        style="class:title",
+    )
+    title_bar_container = ConditionalContainer(title_bar, filter=~is_zen_layout)
+
+    main_window = Window(
+        content=FormattedTextControl(get_main_content),
+        wrap_lines=False,
+    )
+
+    separator = Window(height=1, char="─", style="class:separator")
+
+    status_bar = Window(
+        content=FormattedTextControl(get_status_content, show_cursor=False),
+        height=1,
+    )
+
+    # Form input display (inline editing via FormattedTextControl)
+    def _get_form_height() -> int:
+        form = state.form
+        if form is None:
+            return 1
+        text_count = sum(1 for s in form.fields if s.widget not in ("chip", "select"))
+        chip_count = sum(1 for s in form.fields if s.widget in ("chip", "select"))
+        return 1 + text_count + (1 if chip_count else 0)  # header + field rows
+
+    form_display = ConditionalContainer(
+        Window(
+            content=FormattedTextControl(get_form_content),
+            height=_get_form_height,
+        ),
+        filter=is_input,
+    )
+
+    layout = Layout(
+        HSplit([
+            title_bar_container,
+            main_window,
+            separator,
+            status_bar,
+            form_display,
+        ])
+    )
+
+    # -- Run --
 
     app = Application(
         layout=layout,
         key_bindings=kb,
-        style=style,
+        style=APP_STYLE,
         full_screen=True,
     )
+    # Shorten escape/prefix timeouts so ESC triggers quickly (default 1s is too slow).
+    # Alt+Up/Down still work: user has ~50ms to press the second key.
+    app.ttimeoutlen = 0.05
+    app.timeoutlen = 0.05
 
-    # Async timer update loop
-    async def update_timer_loop():
-        """Background task to update timer frequently, refresh only when needed."""
-        while True:
-            await asyncio.sleep(0.1)  # Check 10 times per second for responsiveness
-            if state.now_state.timer_state == TimerStateEnum.RUNNING:
-                # Only invalidate if timer seconds actually changed
-                if state.now_state.update_timer():
-                    app.invalidate()
+    def _set_now_result(result: Result) -> None:
+        state.last_result = result
 
-            # Consume one-shot timer events regardless of view/mode.
-            timer_event = state.now_state.consume_timer_event()
-            if timer_event is None:
-                continue
-
-            _bell(app)
-
-            if timer_event == TimerEventEnum.WORK_5MIN_LEFT:
-                # Subtle: no foreground activation.
-                state.message.set(Result(True, None, "5 minutes left"))
-                app.invalidate()
-                continue
-
-            if timer_event == TimerEventEnum.WORK_TIME_UP:
-                _activate_iterm2_macos()
-                state.message.set(Result(True, None, "Time's up (00:00). Press Enter to finish session, or r to reset"))
-                # Auto-enter confirm; user can cancel and re-enter later via Enter.
-                state.ask_confirm(ConfirmAction.FINISH_SESSION)
-                app.invalidate()
-                continue
-
-            if timer_event == TimerEventEnum.BREAK_TIME_UP:
-                state.message.set(Result(True, None, "Break time is over"))
-                app.invalidate()
-                continue
-    
-    # Run app with async timer
-    async def run_async():
-        asyncio.create_task(update_timer_loop())
+    async def _run_async() -> None:
+        asyncio.create_task(
+            run_timer_runtime(
+                now=state.now,
+                app=app,
+                on_result=_set_now_result,
+            )
+        )
         await app.run_async()
-    
-    asyncio.run(run_async())
+
+    asyncio.run(_run_async())

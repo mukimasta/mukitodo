@@ -1,6 +1,6 @@
 [project]
 name = "toflow"
-version = "0.1.0"
+version = "0.2.0"
 description = "命令行 Todo 应用"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -12,6 +12,7 @@ dependencies = [
 
 [project.scripts]
 toflow = "toflow.cli:app"
+toflow-tui = "toflow.tui.app:run"
 
 [tool.uv]
 package = true
